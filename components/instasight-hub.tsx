@@ -512,9 +512,7 @@ export function InstaSightHub({ onViewAudience }: InstaSightHubProps) {
   
 const currentDate = new Date()
 
-const [selectedMonth, setSelectedMonth] = useState(
-  String(currentDate.getMonth() + 1)
-)
+const [selectedMonth, setSelectedMonth] = useState("all")
 const [selectedYear, setSelectedYear] = useState(String(currentDate.getFullYear()))
 const [contentLabelFilter, setContentLabelFilter] = useState("all")
 
@@ -850,12 +848,16 @@ return (
         <Card className="border-border bg-card shadow-sm">
           <CardHeader>
             <CardTitleTooltip
-              title="InstaSight Ready to Sync"
+              title={
+                status?.latestSuccessfulSync
+                  ? "No Instagram Data for This Period"
+                  : "InstaSight Ready to Sync"
+              }
               tooltip={
-                status?.connectionState === "connected"
-                  ? "Meta is connected, but no Instagram data yet."
-                  : status?.connectionState === "error"
-                    ? "Meta credentials are configured but the connection has issues."
+                status?.connectionState === "error"
+                  ? "Meta credentials are configured but the connection has issues."
+                  : status?.latestSuccessfulSync
+                    ? "Meta is connected and has synced before, but no Instagram data falls within the selected period."
                     : "Meta is connected, but no Instagram data yet."
               }
             />
@@ -864,7 +866,29 @@ return (
             {status?.connectionState === "error" && status?.connectionError ? (
               <p className="text-red-600">{status.connectionError}</p>
             ) : null}
-            <p>Instagram data will appear here after the first Meta synchronization completes.</p>
+            {status?.latestSuccessfulSync ? (
+              <>
+                <p>
+                  No synced Instagram content was found for{" "}
+                  {MONTH_OPTIONS.find((month) => month.value === selectedMonth)?.label || "the selected period"}{" "}
+                  {selectedYear}.
+                </p>
+                <p>
+                  Last successfully synced:{" "}
+                  <span className="font-medium text-foreground">
+                    {new Date(
+                      status.latestSuccessfulSync.finishedAt ||
+                        status.latestSuccessfulSync.startedAt
+                    ).toLocaleString()}
+                  </span>
+                </p>
+                <p>
+                  Choose another month or run a Meta sync from the Data Management Center to fetch the latest Instagram data.
+                </p>
+              </>
+            ) : (
+              <p>Instagram data will appear here after the first Meta synchronization completes.</p>
+            )}
             <p>Last sync status: <span className="font-medium text-foreground">{status?.latestSync?.status || "Not synced"}</span></p>
           </CardContent>
         </Card>
