@@ -193,10 +193,10 @@ const buildBusinessSegmentationMessage = (latest: SegmentationLatestData | null)
 
 const buildSegmentBusinessSummary = (segmentName: string, description?: string | null) => {
   const summaryMap: Record<string, string> = {
-    "Prime Players": "High-value customers worth protecting with priority treatment and loyalty perks.",
-    "Routine Players": "Consistent high-frequency customers with stable contribution but lower overall value than Prime Players.",
-    "Growth Players": "Promising customers who may spend more with the right nudge and follow-up.",
-    "Re-Engagement Players": "Inactive or low-frequency customers who need a simple reactivation push.",
+    "High-Value Players": "High-value customers worth protecting with priority treatment and loyalty perks.",
+    "Regular Players": "Consistent high-frequency customers with stable contribution but lower overall value than High-Value Players.",
+    "Occasional Players": "Reasonably recent customers who book infrequently and have not yet built a repeat-booking habit.",
+    "Lapsed Players": "Customers who have not booked recently and need a simple reactivation push.",
   }
 
   return summaryMap[segmentName] || description || "This segment reflects a distinct booking pattern and customer value profile."
@@ -204,10 +204,10 @@ const buildSegmentBusinessSummary = (segmentName: string, description?: string |
 
 const buildSegmentActionContext = (segmentName: string, recommendedAction?: string | null) => {
   const actionMap: Record<string, string> = {
-    "Prime Players": "Use retention offers, VIP treatment, and priority booking reminders.",
-    "Routine Players": "Maintain engagement with frequency-based loyalty perks, membership upgrades, and consistent booking packages.",
-    "Growth Players": "Push follow-up campaigns, bundles, and repeat-booking incentives.",
-    "Re-Engagement Players": "Send a simple reactivation message and make it easy to book again.",
+    "High-Value Players": "Use retention offers, VIP treatment, and priority booking reminders.",
+    "Regular Players": "Maintain engagement with frequency-based loyalty perks, membership upgrades, and consistent booking packages.",
+    "Occasional Players": "Push follow-up campaigns, bundles, and repeat-booking incentives.",
+    "Lapsed Players": "Send a simple reactivation message and make it easy to book again.",
   }
 
   return recommendedAction || actionMap[segmentName] || "Use the segment for targeted follow-up and campaign planning."

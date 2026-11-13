@@ -279,7 +279,7 @@ type CampaignObjectiveKey =
   | "customer_reactivation_and_retention"
 
 const venueTypes = ["All Venue", "Mini Soccer", "Basketball"] as const
-const targetSegments = ["Prime Players", "Routine Players", "Growth Players", "Re-Engagement Players"]
+const targetSegments = ["High-Value Players", "Regular Players", "Occasional Players", "Lapsed Players"]
 const campaignObjectives: ReadonlyArray<{ key: CampaignObjectiveKey; label: string }> = [
   { key: "maximize_off_peak_occupancy", label: "Maximize Off-Peak Occupancy" },
   { key: "drive_revenue_growth", label: "Drive Revenue Growth" },
@@ -385,10 +385,10 @@ const formatTargetDirection = (value: string) => ({
 }[value] || value)
 
 const segmentKeys: Record<string, string> = {
-  "Prime Players": "prime",
-  "Routine Players": "routine",
-  "Growth Players": "growth",
-  "Re-Engagement Players": "re_engagement",
+  "High-Value Players": "prime",
+  "Regular Players": "routine",
+  "Occasional Players": "growth",
+  "Lapsed Players": "re_engagement",
 }
 
 const venueKeys: Record<string, string> = {
@@ -468,7 +468,7 @@ export function GenAIWorkspace({ userRole: userRoleFromProps }: GenAIWorkspacePr
   const [workspaceMode, setWorkspaceMode] = useState<WorkspaceModeKey>("general_strategy")
   const [outreachContext, setOutreachContext] = useState<LowOccupancyOutreachContext | null>(null)
   const [selectedVenueType, setSelectedVenueType] = useState<(typeof venueTypes)[number]>("All Venue")
-  const [selectedSegment, setSelectedSegment] = useState("Re-Engagement Players")
+  const [selectedSegment, setSelectedSegment] = useState("Lapsed Players")
   const [selectedObjective, setSelectedObjective] = useState<CampaignObjectiveKey>(DEFAULT_GENERAL_OBJECTIVE)
   const [lastGeneralStrategyObjective, setLastGeneralStrategyObjective] = useState<CampaignObjectiveKey>(DEFAULT_GENERAL_OBJECTIVE)
   const [selectedIncentive, setSelectedIncentive] = useState("ai_recommended")

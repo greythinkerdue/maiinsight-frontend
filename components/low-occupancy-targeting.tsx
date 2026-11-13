@@ -198,10 +198,10 @@ const CUSTOMER_TYPE_OPTIONS = [
 ]
 const SEGMENT_OPTIONS = [
   { value: "all", label: "All" },
-  { value: "Prime Players", label: "Prime Players" },
-  { value: "Routine Players", label: "Routine Players" },
-  { value: "Growth Players", label: "Growth Players" },
-  { value: "Re-Engagement Players", label: "Re-Engagement Players" },
+  { value: "High-Value Players", label: "High-Value Players" },
+  { value: "Regular Players", label: "Regular Players" },
+  { value: "Occasional Players", label: "Occasional Players" },
+  { value: "Lapsed Players", label: "Lapsed Players" },
 ]
 
 const getTodayIso = () => {

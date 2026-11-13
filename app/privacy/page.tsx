@@ -68,7 +68,7 @@ export default function PrivacyPolicy() {
             <h2 className="text-lg font-semibold text-foreground">3. How We Use Your Information</h2>
             <p className="mt-2">The collected information is used for the following purposes:</p>
             <ul className="mt-2 list-disc pl-5 space-y-1">
-              <li><strong>Customer Segmentation:</strong> Processing transaction data using RFM analysis and K-Means++ clustering to identify customer groups (Prime Players, Routine Players, Growth Players, Re-Engagement Players)</li>
+              <li><strong>Customer Segmentation:</strong> Processing transaction data using RFM analysis and K-Means++ clustering to identify customer groups (High-Value Players, Regular Players, Occasional Players, Lapsed Players)</li>
               <li><strong>Marketing Strategy Generation:</strong> Using AI (Google Gemini) to generate targeted marketing recommendations based on customer segments and occupancy patterns</li>
               <li><strong>Occupancy Optimization:</strong> Identifying low-occupancy time slots and recommending customer targeting to fill empty sessions</li>
               <li><strong>Social Media Analytics:</strong> Monitoring Instagram content performance and audience demographics to inform marketing decisions</li>

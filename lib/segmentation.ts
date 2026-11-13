@@ -212,17 +212,17 @@ export const fetchSegmentationCustomers = async (params: {
 }
 
 export const CUSTOMER_SEGMENT_ORDER = [
-  "Prime Players",
-  "Routine Players",
-  "Growth Players",
-  "Re-Engagement Players",
+  "High-Value Players",
+  "Regular Players",
+  "Occasional Players",
+  "Lapsed Players",
 ] as const
 
 export const CUSTOMER_SEGMENT_COLORS: Record<string, string> = {
-  "Prime Players": "var(--chart-1)",
-  "Routine Players": "var(--chart-2)",
-  "Growth Players": "var(--chart-3)",
-  "Re-Engagement Players": "var(--chart-4)",
+  "High-Value Players": "var(--chart-1)",
+  "Regular Players": "var(--chart-2)",
+  "Occasional Players": "var(--chart-3)",
+  "Lapsed Players": "var(--chart-4)",
 }
 
 export const sortClusterProfiles = (clusters: ClusterProfile[]) => {
