@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   AlertCircle,
   BrainCircuit,
@@ -414,9 +414,10 @@ export function SegmentVisualization() {
     DEFAULT_LAST_VISIT_FILTER
   )
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const latestDataRef = useRef<SegmentationLatestData | null>(null)
 
-  const loadSegmentation = async () => {
-    const showBlockingLoading = !latestData
+  const loadSegmentation = useCallback(async () => {
+    const showBlockingLoading = !latestDataRef.current
     const maxRecencyDays =
       getLastVisitFilter(lastVisitFilter).maxRecencyDays ?? undefined
 
@@ -510,7 +511,11 @@ export function SegmentVisualization() {
       setIsLoading(false)
       setIsRefreshing(false)
     }
-  }
+  }, [lastVisitFilter])
+
+  useEffect(() => {
+    latestDataRef.current = latestData
+  }, [latestData])
 
   useEffect(() => {
     void loadSegmentation()
@@ -523,7 +528,7 @@ export function SegmentVisualization() {
     return () => {
       window.removeEventListener(SEGMENTATION_UPDATED_EVENT, handleSegmentationUpdated)
     }
-  }, [lastVisitFilter])
+  }, [loadSegmentation])
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 400)
