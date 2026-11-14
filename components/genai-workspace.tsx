@@ -280,6 +280,42 @@ type CampaignObjectiveKey =
 
 const venueTypes = ["All Venue", "Mini Soccer", "Basketball"] as const
 const targetSegments = ["High-Value Players", "Regular Players", "Occasional Players", "Lapsed Players"]
+
+const legacySegmentLabels: Record<string, string> = {
+  "prime players": "High-Value Players",
+  prime: "High-Value Players",
+  "high value players": "High-Value Players",
+  "high value": "High-Value Players",
+  "high-value": "High-Value Players",
+  "routine players": "Regular Players",
+  routine: "Regular Players",
+  regular: "Regular Players",
+  "growth players": "Occasional Players",
+  growth: "Occasional Players",
+  occasional: "Occasional Players",
+  "re-engagement players": "Lapsed Players",
+  "re-engagement": "Lapsed Players",
+  "reengagement players": "Lapsed Players",
+  reengagement: "Lapsed Players",
+  re_engagement: "Lapsed Players",
+  "re engagement": "Lapsed Players",
+  lapsed: "Lapsed Players",
+  "at risk players": "Lapsed Players",
+  "at-risk players": "Lapsed Players",
+  "at risk": "Lapsed Players",
+  "at-risk": "Lapsed Players",
+}
+
+const normalizeSegmentLabel = (value?: string | null) => {
+  const normalized = String(value || "").trim().toLowerCase()
+  if (!normalized) return null
+
+  return (
+    targetSegments.find((segment) => segment.toLowerCase() === normalized) ||
+    legacySegmentLabels[normalized] ||
+    null
+  )
+}
 const campaignObjectives: ReadonlyArray<{ key: CampaignObjectiveKey; label: string }> = [
   { key: "maximize_off_peak_occupancy", label: "Maximize Off-Peak Occupancy" },
   { key: "drive_revenue_growth", label: "Drive Revenue Growth" },
@@ -507,7 +543,8 @@ export function GenAIWorkspace({ userRole: userRoleFromProps }: GenAIWorkspacePr
   useEffect(() => {
     const applyContext = (context: LowOccupancyOutreachContext | null) => {
       if (!context) return
-      setOutreachContext(context)
+      const normalizedSegment = normalizeSegmentLabel(context.rfmSegmentName)
+      setOutreachContext({ ...context, rfmSegmentName: normalizedSegment })
       setWorkspaceMode("low_occupancy_outreach")
       setSelectedObjective((currentObjective) => {
         setLastGeneralStrategyObjective(currentObjective)
@@ -515,8 +552,8 @@ export function GenAIWorkspace({ userRole: userRoleFromProps }: GenAIWorkspacePr
       })
       setStrategy(null)
       setSelectedVenueType(mapCourtTypeToVenue(context.courtType))
-      if (context.rfmSegmentName) {
-        setSelectedSegment(context.rfmSegmentName)
+      if (normalizedSegment) {
+        setSelectedSegment(normalizedSegment)
       }
       setSelectedTone("Casual & Community Hook")
     }
@@ -557,6 +594,8 @@ export function GenAIWorkspace({ userRole: userRoleFromProps }: GenAIWorkspacePr
   const selectedObjectiveLabel = campaignObjectives.find((objective) => objective.key === selectedObjective)?.label || selectedObjective
   const resolvedOfferFramework = advancedSettingsOpen ? selectedIncentive : "ai_recommended"
   const resolvedOfferFrameworkLabel = incentiveFrameworks.find((item) => item.key === resolvedOfferFramework)?.label || "AI Recommended"
+  const selectedSegmentLabel = normalizeSegmentLabel(selectedSegment) || "Lapsed Players"
+  const outreachSegmentLabel = normalizeSegmentLabel(outreachContext?.rfmSegmentName) || selectedSegmentLabel
 
 
   const loadWorkspaceStatus = async () => {
@@ -576,7 +615,7 @@ export function GenAIWorkspace({ userRole: userRoleFromProps }: GenAIWorkspacePr
           cache: "no-store",
         }),
         fetch(getApiUrl(`/ai-strategy/latest?${new URLSearchParams({
-          segmentKey: segmentKeys[selectedSegment] || selectedSegment,
+          segmentKey: segmentKeys[selectedSegmentLabel] || selectedSegmentLabel,
           venueKey: venueKeys[selectedVenueType] || "all",
           sessionKey: "all",
           campaignObjectiveKey: selectedObjective,
@@ -636,8 +675,8 @@ export function GenAIWorkspace({ userRole: userRoleFromProps }: GenAIWorkspacePr
           workspaceModeKey: "low_occupancy_outreach",
           venueKey: venueKeys[selectedVenueType],
           venueLabel: selectedVenueType,
-          segmentKey: segmentKeys[outreachContext?.rfmSegmentName || selectedSegment],
-          segmentLabel: outreachContext?.rfmSegmentName || selectedSegment,
+          segmentKey: segmentKeys[outreachSegmentLabel] || outreachSegmentLabel,
+          segmentLabel: outreachSegmentLabel,
           sessionKey: outreachContext?.sessionName.toLowerCase() || "all",
           sessionLabel: outreachContext?.sessionName || "All Sessions",
           campaignObjectiveKey: LOW_OCCUPANCY_OBJECTIVE,
@@ -657,7 +696,7 @@ export function GenAIWorkspace({ userRole: userRoleFromProps }: GenAIWorkspacePr
             targetPriorityScore: outreachContext.targetPriorityScore,
             customerTypeLabel: outreachContext.customerTypeLabel,
             selectedSessionBookingCount: outreachContext.selectedSessionBookingCount,
-          } : { segmentName: selectedSegment }),
+          } : { segmentName: selectedSegmentLabel }),
         },
         business_context: {
           date: outreachContext?.date || null,
@@ -685,8 +724,8 @@ export function GenAIWorkspace({ userRole: userRoleFromProps }: GenAIWorkspacePr
         workspaceModeKey: "general_strategy",
         venueKey: venueKeys[selectedVenueType],
         venueLabel: selectedVenueType,
-        segmentKey: segmentKeys[selectedSegment],
-        segmentLabel: selectedSegment,
+        segmentKey: segmentKeys[selectedSegmentLabel] || selectedSegmentLabel,
+        segmentLabel: selectedSegmentLabel,
         sessionKey: "all",
         sessionLabel: "All Sessions",
         campaignObjectiveKey: selectedObjective,
@@ -699,7 +738,7 @@ export function GenAIWorkspace({ userRole: userRoleFromProps }: GenAIWorkspacePr
         analysisPeriodKey,
       },
       customer_segment_summary: {
-        segmentName: selectedSegment,
+        segmentName: selectedSegmentLabel,
       },
       business_context: {
         venueType: selectedVenueType,
@@ -710,7 +749,7 @@ export function GenAIWorkspace({ userRole: userRoleFromProps }: GenAIWorkspacePr
         copywritingTone: selectedTone,
       },
     }
-  }, [analysisPeriodKey, outreachContext, resolvedOfferFramework, resolvedOfferFrameworkLabel, selectedObjective, selectedObjectiveLabel, selectedSegment, selectedTone, selectedVenueType, workspaceMode])
+  }, [analysisPeriodKey, outreachContext, outreachSegmentLabel, resolvedOfferFramework, resolvedOfferFrameworkLabel, selectedObjective, selectedObjectiveLabel, selectedSegmentLabel, selectedTone, selectedVenueType, workspaceMode])
 
   useEffect(() => {
     if (!canViewPage || !aiStatus?.configured) return
@@ -1090,7 +1129,7 @@ export function GenAIWorkspace({ userRole: userRoleFromProps }: GenAIWorkspacePr
       <label className="space-y-2 text-sm font-medium">
         <span>Customer Segment</span>
 
-        <Select value={selectedSegment} onValueChange={setSelectedSegment} disabled={!canGenerateAi}>
+        <Select value={selectedSegmentLabel} onValueChange={setSelectedSegment} disabled={!canGenerateAi}>
           <SelectTrigger className={selectTriggerClassName}>
             <SelectValue placeholder="Select customer segment" />
           </SelectTrigger>
@@ -1181,7 +1220,7 @@ export function GenAIWorkspace({ userRole: userRoleFromProps }: GenAIWorkspacePr
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.12em] text-primary">Audience Profile</p>
-          <h2 id="selected-segment-heading" className="mt-1 text-lg font-semibold text-foreground">Selected Segment: {selectedSegment}</h2>
+          <h2 id="selected-segment-heading" className="mt-1 text-lg font-semibold text-foreground">Selected Segment: {selectedSegmentLabel}</h2>
         </div>
         <Button
           variant="outline"
@@ -1264,7 +1303,7 @@ export function GenAIWorkspace({ userRole: userRoleFromProps }: GenAIWorkspacePr
               {" · "}
               {formatOpportunityKey(strategyContext.business_opportunity_summary.opportunityLevel)}
             </p>
-            <p className="mt-2 text-sm text-muted-foreground">{selectedSegment} holds strategic value, with the top off-peak window as the focus for the next campaign.</p>
+            <p className="mt-2 text-sm text-muted-foreground">{selectedSegmentLabel} holds strategic value, with the top off-peak window as the focus for the next campaign.</p>
           </div>
 
           {showDetailedContext && strategyContext.off_peak_opportunity?.available && strategyContext.off_peak_opportunity.lowestOccupancyWindows.length > 1 ? (
@@ -1533,7 +1572,7 @@ export function GenAIWorkspace({ userRole: userRoleFromProps }: GenAIWorkspacePr
 
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                   <StrategyFieldCard label="Campaign Objective" value={strategy.strategy.campaignObjective} accent="blue" />
-                  <StrategyFieldCard label="Selected Segment" value={strategy.strategy.targetSegmentLabel || selectedSegment} accent="emerald" />
+                  <StrategyFieldCard label="Selected Segment" value={strategy.strategy.targetSegmentLabel || selectedSegmentLabel} accent="emerald" />
                   {strategy.strategy.targetDayLabel ? (
                     <StrategyFieldCard label="Target Day" value={strategy.strategy.targetDayLabel} accent="emerald" />
                   ) : null}
