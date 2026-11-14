@@ -1240,7 +1240,15 @@ export function GenAIWorkspace({ userRole: userRoleFromProps }: GenAIWorkspacePr
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{Array.from({ length: 4 }).map((_, index) => <Skeleton key={index} className="h-24 rounded-xl" />)}</div>
         </div>
       ) : contextError ? (
-        <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive">{contextError} Generation is disabled.</div>
+        <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive">
+          <p className="font-medium">{contextError}</p>
+          <p className="mt-1 text-xs">
+            Generation is disabled until the audience context loads.
+            {contextError.toLowerCase().includes("customer segment")
+              ? " Choose High-Value Players, Regular Players, Occasional Players, or Lapsed Players from the Customer Segment dropdown, then try again."
+              : " Check the selected filters, segmentation data, and AI configuration, then refresh."}
+          </p>
+        </div>
       ) : strategyContext ? (
         <div className="space-y-6">
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
