@@ -175,6 +175,23 @@ const formatRunDate = (value?: string | null) => {
   }).format(date)
 }
 
+const LAST_VISIT_FILTER_OPTIONS = [
+  { value: "30", label: "Last 30 days", maxRecencyDays: 30 },
+  { value: "90", label: "Last 90 days", maxRecencyDays: 90 },
+  { value: "180", label: "Last 6 months", maxRecencyDays: 180 },
+  { value: "365", label: "Last 12 months", maxRecencyDays: 365 },
+  { value: "730", label: "Last 24 months", maxRecencyDays: 730 },
+  { value: "all", label: "All time", maxRecencyDays: null },
+] as const
+
+type LastVisitFilter = (typeof LAST_VISIT_FILTER_OPTIONS)[number]["value"]
+
+const DEFAULT_LAST_VISIT_FILTER: LastVisitFilter = "all"
+
+const getLastVisitFilter = (value: LastVisitFilter) =>
+  LAST_VISIT_FILTER_OPTIONS.find((option) => option.value === value) ||
+  LAST_VISIT_FILTER_OPTIONS[LAST_VISIT_FILTER_OPTIONS.length - 1]
+
 const buildBusinessSegmentationMessage = (latest: SegmentationLatestData | null) => {
   if (!latest?.selectedK) {
     return "No segment results are available yet. Run ML from Data Center to generate customer groups."
@@ -393,15 +410,27 @@ export function SegmentVisualization() {
   const [currentPage, setCurrentPage] = useState(1)
   const [pageSize, setPageSize] = useState(10)
   const [error, setError] = useState("")
+  const [lastVisitFilter, setLastVisitFilter] = useState<LastVisitFilter>(
+    DEFAULT_LAST_VISIT_FILTER
+  )
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   const loadSegmentation = async () => {
+    const showBlockingLoading = !latestData
+    const maxRecencyDays =
+      getLastVisitFilter(lastVisitFilter).maxRecencyDays ?? undefined
+
     try {
-      setIsLoading(true)
+      if (showBlockingLoading) {
+        setIsLoading(true)
+      } else {
+        setIsRefreshing(true)
+      }
       setError("")
 
       const [summaryResult, latestResult] = await Promise.all([
-        fetchSegmentationSummary(),
-        fetchSegmentationLatest(),
+        fetchSegmentationSummary({ maxRecencyDays }),
+        fetchSegmentationLatest({ maxRecencyDays }),
       ])
 
       const sortedClusters = sortClusterProfiles(summaryResult.clusters || [])
@@ -479,6 +508,7 @@ export function SegmentVisualization() {
       setSelectedSegment(null)
     } finally {
       setIsLoading(false)
+      setIsRefreshing(false)
     }
   }
 
@@ -493,7 +523,7 @@ export function SegmentVisualization() {
     return () => {
       window.removeEventListener(SEGMENTATION_UPDATED_EVENT, handleSegmentationUpdated)
     }
-  }, [])
+  }, [lastVisitFilter])
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 400)
@@ -502,7 +532,7 @@ export function SegmentVisualization() {
 
   useEffect(() => {
     setCurrentPage(1)
-  }, [selectedSegment, pageSize, debouncedSearch])
+  }, [selectedSegment, pageSize, debouncedSearch, lastVisitFilter])
 
   useEffect(() => {
     if (!latestData?.run?.id) {
@@ -517,6 +547,8 @@ export function SegmentVisualization() {
         const customerResult = await fetchSegmentationCustomers({
           segmentName: selectedSegment || undefined,
           search: debouncedSearch || undefined,
+          maxRecencyDays:
+            getLastVisitFilter(lastVisitFilter).maxRecencyDays ?? undefined,
           limit: pageSize,
           offset: (currentPage - 1) * pageSize,
         })
@@ -536,9 +568,26 @@ export function SegmentVisualization() {
     }
 
     void loadCustomers()
-  }, [latestData?.run?.id, selectedSegment, currentPage, pageSize, debouncedSearch])
+  }, [latestData?.run?.id, selectedSegment, currentPage, pageSize, debouncedSearch, lastVisitFilter])
 
   const clusters = useMemo(() => summaryData?.clusters || [], [summaryData])
+  const activeLastVisitFilter = getLastVisitFilter(lastVisitFilter)
+  const isRecencyFiltered = activeLastVisitFilter.maxRecencyDays !== null
+  const activeClusters = useMemo(
+    () => clusters.filter((cluster) => (cluster.customerCount || 0) > 0),
+    [clusters]
+  )
+  const topCluster = useMemo(
+    () =>
+      activeClusters.reduce<ClusterProfile | null>(
+        (top, cluster) =>
+          !top || (cluster.customerCount || 0) > (top.customerCount || 0)
+            ? cluster
+            : top,
+        null
+      ),
+    [activeClusters]
+  )
   const selectedCluster =
     clusters.find((cluster) => cluster.segmentName === selectedSegment) || null
   const selectedCustomers = selectedSegment
@@ -659,6 +708,20 @@ export function SegmentVisualization() {
 
   const previousTotalCustomers = latestData.previousRun?.totalCustomers || 0
   const totalCustomersChange = latestData.totalCustomers - previousTotalCustomers
+  const unfilteredTotalCustomers =
+    latestData.unfilteredTotalCustomers ?? latestData.totalCustomers
+  const topThreeShare =
+    latestData.totalCustomers > 0
+      ? Math.round(
+          (activeClusters
+            .slice()
+            .sort((left, right) => (right.customerCount || 0) - (left.customerCount || 0))
+            .slice(0, 3)
+            .reduce((sum, cluster) => sum + (cluster.customerCount || 0), 0) /
+            latestData.totalCustomers) *
+            100
+        )
+      : null
 
   return (
     <TooltipProvider>
@@ -669,11 +732,45 @@ export function SegmentVisualization() {
             <p className="text-muted-foreground">
               Business-ready customer groups based on completed bookings and walk-in activity only
             </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {isRecencyFiltered
+                ? `Reachability filter: ${activeLastVisitFilter.label.toLowerCase()}. Choose All time to include lapsed customers.`
+                : "Showing all customers in the latest run, including lapsed customers."}
+            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <label
+              className="flex items-center gap-2 rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium shadow-sm"
+              title="Only include customers whose latest completed booking falls within this window."
+            >
+              <span className="text-muted-foreground">Last visit</span>
+              <select
+                aria-label="Filter by last visit"
+                value={lastVisitFilter}
+                onChange={(event) =>
+                  setLastVisitFilter(event.target.value as LastVisitFilter)
+                }
+                disabled={isRefreshing}
+                className="bg-transparent text-sm font-semibold text-foreground outline-none disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {LAST_VISIT_FILTER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              {isRefreshing ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+              ) : null}
+            </label>
             <Badge variant="outline">Latest Run Engine: {formatRunDate(latestData.run.runDate)}</Badge>
-            <Button variant="outline" size="sm" onClick={() => void loadSegmentation()}>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={isRefreshing}
+              onClick={() => void loadSegmentation()}
+            >
               <RefreshCw className="mr-2 h-4 w-4" />
               Refresh
             </Button>
@@ -682,49 +779,47 @@ export function SegmentVisualization() {
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <KpiCard
-            label="Total Customers"
-            tooltip="Total number of unique customers identified from transaction data."
+            label={isRecencyFiltered ? "Reachable Customers" : "Total Customers"}
+            tooltip={
+              isRecencyFiltered
+                ? `Customers whose latest completed booking falls within the ${activeLastVisitFilter.label.toLowerCase()} window.`
+                : "Total number of unique customers identified from transaction data."
+            }
             value={formatNumber(latestData.totalCustomers, 0)}
             changeLabel={
-              previousTotalCustomers
-                ? `${formatChange((totalCustomersChange / previousTotalCustomers) * 100)} vs last month`
-                : "No comparison available"
+              isRecencyFiltered
+                ? `${formatNumber(latestData.totalCustomers, 0)} of ${formatNumber(unfilteredTotalCustomers, 0)} customers in the latest run`
+                : previousTotalCustomers
+                  ? `${formatChange((totalCustomersChange / previousTotalCustomers) * 100)} vs last month`
+                  : "No comparison available"
             }
             icon={Users}
-            iconClassName={totalCustomersChange < 0 ? "text-destructive" : "text-emerald-600"}
+            iconClassName={
+              !isRecencyFiltered && totalCustomersChange < 0
+                ? "text-destructive"
+                : "text-emerald-600"
+            }
           />
           <KpiCard
             label="Top Segment"
-            tooltip="The customer segment with the largest population from the latest ML clustering run."
-            value={
-              clusters.length > 0
-                ? clusters.reduce((a, b) => (a.customerCount && b.customerCount ? (b.customerCount > a.customerCount ? b : a) : a)).segmentName
-                : "-"
-            }
+            tooltip="The customer segment with the largest population in the current view."
+            value={topCluster?.segmentName || "-"}
             changeLabel={
-              clusters.length > 0 && latestData?.totalCustomers
-                ? `${Math.round((clusters.reduce((a, b) => (a.customerCount && b.customerCount ? (b.customerCount > a.customerCount ? b : a) : a)).customerCount || 0) / latestData.totalCustomers * 100)}% of customers`
-                : "No data available"
+              topCluster && latestData.totalCustomers > 0
+                ? `${Math.round(((topCluster.customerCount || 0) / latestData.totalCustomers) * 100)}% of customers`
+                : "No customers in this view"
             }
           />
           <KpiCard
             label="Top 3 Segment Share"
             tooltip="Combined customer share of the three largest segments — indicates concentration."
-            value={
-              clusters.length > 0 && latestData?.totalCustomers
-                ? `${Math.round((clusters
-                    .slice(0)
-                    .sort((x, y) => (y.customerCount || 0) - (x.customerCount || 0))
-                    .slice(0, 3)
-                    .reduce((sum, c) => sum + (c.customerCount || 0), 0) / latestData.totalCustomers) * 100)}%`
-                : "-"
-            }
+            value={topThreeShare !== null ? `${topThreeShare}%` : "-"}
             changeLabel="Share of customers in top 3 segments"
           />
           <KpiCard
             label="Active Segments"
-            tooltip="Number of distinct customer segments generated by the latest Machine Learning run."
-            value={clusters.length}
+            tooltip="Number of distinct customer segments with at least one customer in the current view."
+            value={activeClusters.length}
             changeLabel={selectedCluster?.segmentName || "No segment selected"}
           />
         </div>

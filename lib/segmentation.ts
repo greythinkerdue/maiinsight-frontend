@@ -81,6 +81,8 @@ export interface SegmentationSummaryData {
   selectionReason: string | null
   clusters: ClusterProfile[]
   summary: ClusterProfile[]
+  totalCustomers: number
+  unfilteredTotalCustomers?: number
 }
 
 export interface SegmentationLatestData extends SegmentationSummaryData {
@@ -174,6 +176,7 @@ export const fetchSegmentationLatest = async (params: {
   limit?: number
   offset?: number
   segmentName?: string
+  maxRecencyDays?: number
 } = {}): Promise<SegmentationLatestData> => {
   const query = buildQuery(params)
   const response = await fetch(getApiUrl(`/segmentation/latest${query}`), {
@@ -185,8 +188,11 @@ export const fetchSegmentationLatest = async (params: {
   return readApiResponse<SegmentationLatestData>(response)
 }
 
-export const fetchSegmentationSummary = async (): Promise<SegmentationSummaryData> => {
-  const response = await fetch(getApiUrl("/segmentation/summary"), {
+export const fetchSegmentationSummary = async (params: {
+  maxRecencyDays?: number
+} = {}): Promise<SegmentationSummaryData> => {
+  const query = buildQuery(params)
+  const response = await fetch(getApiUrl(`/segmentation/summary${query}`), {
     method: "GET",
     cache: "no-store",
     headers: getAuthHeaders(),
@@ -198,6 +204,7 @@ export const fetchSegmentationSummary = async (): Promise<SegmentationSummaryDat
 export const fetchSegmentationCustomers = async (params: {
   segmentName?: string
   search?: string
+  maxRecencyDays?: number
   limit?: number
   offset?: number
 } = {}): Promise<SegmentationCustomersData> => {
