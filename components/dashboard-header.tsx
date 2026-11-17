@@ -16,6 +16,7 @@ const PAGE_TITLES: Record<PageId, string> = {
   data: "Data Center",
   targeting: "Fill Sessions",
   genai: "GenAI Workspace",
+  "campaign-kpis": "Campaign KPIs",
   instasight: "InstaSight",
   history: "History",
   settings: "Settings",

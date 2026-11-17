@@ -5,22 +5,25 @@ import { readFile } from "node:fs/promises"
 const source = await readFile(new URL("./low-occupancy-targeting.tsx", import.meta.url), "utf8")
 const api = await readFile(new URL("../lib/targeting.ts", import.meta.url), "utf8")
 
-test("Campaign Targeting uses weekday and calendar-month analysis filters", () => {
+test("Campaign Targeting uses weekday, campaign date, and calendar-month analysis filters", () => {
   const start = source.indexOf("Campaign Targeting")
-  const end = source.indexOf("Historical Campaign Performance", start)
+  const end = source.indexOf("Slot Availability", start)
   const filters = source.slice(start, end)
-  for (const label of ["Campaign Day", "Analysis Period", "Court Type", "Play Session", "Target Customer", "RFM Segment"]) {
+  for (const label of ["Campaign Day", "Campaign Date", "Analysis Period", "Court Type", "Play Session", "Target Customer", "RFM Segment"]) {
     assert.match(filters, new RegExp(label))
   }
-  assert.ok(filters.indexOf("Campaign Day") < filters.indexOf("Analysis Period"))
+  assert.ok(filters.indexOf("Campaign Day") < filters.indexOf("Campaign Date"))
+  assert.ok(filters.indexOf("Campaign Date") < filters.indexOf("Analysis Period"))
   assert.ok(filters.indexOf("Analysis Period") < filters.indexOf("Court Type"))
-  assert.doesNotMatch(filters, /Campaign Date|Minimum Session Booking Count/)
+  assert.doesNotMatch(filters, /Minimum Session Booking Count/)
 })
 
-test("recommendation request uses campaign day and analysis period without obsolete parameters", () => {
+test("recommendation request carries campaign date and bounded history", () => {
   assert.match(api, /campaignDay: string/)
   assert.match(api, /analysisPeriodMonths: number/)
-  assert.doesNotMatch(api, /minSessionBookingCount|campaignDate/)
+  assert.match(api, /campaignDate\?: string/)
+  assert.match(api, /historyLookbackMonths: number/)
+  assert.doesNotMatch(api, /minSessionBookingCount/)
 })
 
 test("monthly cards expose facility occupancy, filled slots, revenue, and partial-period date", () => {
@@ -101,4 +104,23 @@ test("page Booking Type filter reserves space and lists booking type options", (
   assert.match(filter, /SelectValue placeholder="Booking Type" className="whitespace-nowrap"/)
   assert.match(filter, /w-\[var\(--radix-select-trigger-width\)\]/)
   assert.match(filter, /BOOKING_TYPE_OPTIONS/)
+})
+
+test("outreach flow exposes campaign creation, consent, WhatsApp links, export, and opt-out", () => {
+  assert.match(source, /Create Outreach Campaign/)
+  assert.match(source, /consentConfirmed/)
+  assert.match(source, /Create Campaign/)
+  assert.match(source, /Promo Code Prefix/)
+  assert.match(source, /Holdout Group/)
+  assert.match(source, /Copy All Messages/)
+  assert.match(source, /Export CSV/)
+  assert.match(source, /wa\.me/)
+  assert.match(source, /handleOptOutCustomer/)
+  assert.match(source, /Slot Availability &amp; Audience Coverage/)
+})
+
+test("pagination refetches through the request helper", () => {
+  assert.match(source, /handleCustomerPageChange/)
+  assert.match(source, /loadCustomers\(\{ nextCustomerPage: safePage \}\)/)
+  assert.match(source, /customerRequestRef/)
 })

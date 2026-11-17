@@ -31,6 +31,23 @@ const ROLE_LABELS: Record<Role, string> = {
   it_support: "IT Support",
 }
 
+const getMetaTokenBadgeTone = (status?: string) => {
+  if (status === "warning") {
+    return "border-yellow-300 bg-yellow-50 text-yellow-700 dark:border-yellow-500/40 dark:bg-yellow-500/10 dark:text-yellow-300"
+  }
+  if (status === "critical") {
+    return "border-orange-300 bg-orange-50 text-orange-700 dark:border-orange-500/40 dark:bg-orange-500/10 dark:text-orange-300"
+  }
+  return ""
+}
+
+const getMetaTokenTextTone = (status?: string) =>
+  status === "critical"
+    ? "text-orange-600 dark:text-orange-400"
+    : status === "warning"
+      ? "text-yellow-600 dark:text-yellow-400"
+      : "text-muted-foreground"
+
 interface SummaryResponse {
   success: boolean
   message?: string
@@ -52,6 +69,9 @@ interface SummaryResponse {
       geminiModel: string
       metaAccessTokenConfigured: boolean
       metaGraphVersion: string
+      whatsappConfigured: boolean
+      whatsappEnabled: boolean
+      whatsappAccessTokenConfigured: boolean
     }
   }
 }
@@ -75,6 +95,14 @@ interface IntegrationConfigResponse {
     metaIgUserId: string
     metaGraphVersion: string
     metaEnabled: boolean
+    whatsappAccessToken: string
+    whatsappAccessTokenConfigured: boolean
+    whatsappPhoneNumberId: string
+    whatsappBusinessAccountId: string
+    whatsappTemplateName: string
+    whatsappTemplateLanguage: string
+    whatsappGraphVersion: string
+    whatsappEnabled: boolean
   }
 }
 
@@ -87,6 +115,7 @@ export function SystemSettings() {
   const [summary, setSummary] = useState<SummaryResponse["data"] | null>(null)
   const [showGeminiKey, setShowGeminiKey] = useState(false)
   const [showMetaToken, setShowMetaToken] = useState(false)
+  const [showWhatsappToken, setShowWhatsappToken] = useState(false)
   const [integrationForm, setIntegrationForm] = useState({
     geminiApiKey: "",
     geminiModel: "",
@@ -95,8 +124,19 @@ export function SystemSettings() {
     metaAccessToken: "",
     metaGraphVersion: "",
     metaEnabled: true,
+    whatsappPhoneNumberId: "",
+    whatsappAccessToken: "",
+    whatsappBusinessAccountId: "",
+    whatsappTemplateName: "",
+    whatsappTemplateLanguage: "id",
+    whatsappGraphVersion: "",
+    whatsappEnabled: true,
   })
   const [isSavingIntegrations, setIsSavingIntegrations] = useState(false)
+  const [testPhoneNumber, setTestPhoneNumber] = useState("")
+  const [isSendingTestMessage, setIsSendingTestMessage] = useState(false)
+  const [testMessageResult, setTestMessageResult] = useState<string | null>(null)
+  const [testMessageError, setTestMessageError] = useState<string | null>(null)
   const [inviteForm, setInviteForm] = useState({ name: "", email: "", role: "operational" as Role })
   const [isCreatingInvite, setIsCreatingInvite] = useState(false)
   const [activationUrl, setActivationUrl] = useState<string | null>(null)
@@ -117,6 +157,7 @@ export function SystemSettings() {
 
   const hasGeminiSecret = Boolean(summary?.integrations.geminiApiKeyConfigured)
   const hasMetaSecret = Boolean(summary?.integrations.metaAccessTokenConfigured)
+  const hasWhatsappSecret = Boolean(summary?.integrations.whatsappAccessTokenConfigured)
 
   const [geminiUsage, setGeminiUsage] = useState<{
     logs: Array<{ id: number; userId: number | null; model: string; feature: string; promptTokens: number; candidatesTokens: number; totalTokens: number; createdAt: string; user: { name: string; email: string } | null }>
@@ -244,6 +285,13 @@ export function SystemSettings() {
         metaAccessToken: editableConfig?.metaAccessToken || "",
         metaGraphVersion: editableConfig?.metaGraphVersion || result.data.integrations.metaGraphVersion || "",
         metaEnabled: editableConfig?.metaEnabled ?? result.data.integrations.metaEnabled,
+        whatsappPhoneNumberId: editableConfig?.whatsappPhoneNumberId || "",
+        whatsappAccessToken: editableConfig?.whatsappAccessToken || "",
+        whatsappBusinessAccountId: editableConfig?.whatsappBusinessAccountId || "",
+        whatsappTemplateName: editableConfig?.whatsappTemplateName || "",
+        whatsappTemplateLanguage: editableConfig?.whatsappTemplateLanguage || "id",
+        whatsappGraphVersion: editableConfig?.whatsappGraphVersion || "",
+        whatsappEnabled: editableConfig?.whatsappEnabled ?? result.data.integrations.whatsappEnabled,
       })
     } catch (err) {
       setError(err instanceof Error ? err.message : "Settings could not be loaded.")
@@ -353,7 +401,31 @@ export function SystemSettings() {
     }
   }
 
-  const toggleIntegration = async (field: "geminiEnabled" | "metaEnabled", value: boolean) => {
+  const sendWhatsappTestMessage = async () => {
+    if (!testPhoneNumber.trim()) return
+    setIsSendingTestMessage(true)
+    setTestMessageResult(null)
+    setTestMessageError(null)
+    try {
+      const response = await fetch(getApiUrl("/system/whatsapp/test-send"), {
+        method: "POST",
+        headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ to: testPhoneNumber.trim() }),
+      })
+      const result = await response.json().catch(() => null)
+      if (!response.ok || !result?.success) {
+        throw new Error(result?.message || "Test message could not be sent.")
+      }
+      setTestMessageResult(`Sent to ${result.data?.to}. Message id: ${result.data?.messageId || "n/a"}`)
+      toast.success("WhatsApp test message sent.")
+    } catch (err) {
+      setTestMessageError(err instanceof Error ? err.message : "Test message could not be sent.")
+    } finally {
+      setIsSendingTestMessage(false)
+    }
+  }
+
+  const toggleIntegration = async (field: "geminiEnabled" | "metaEnabled" | "whatsappEnabled", value: boolean) => {
     setIntegrationForm((p) => ({ ...p, [field]: value }))
     try {
       const updatedForm = { ...integrationForm, [field]: value }
@@ -366,7 +438,9 @@ export function SystemSettings() {
       if (!response.ok || !result?.success) throw new Error(result?.message || "Toggle could not be saved.")
       await loadSettings()
       void checkTokensNow(true)
-      toast.success(`${field === "geminiEnabled" ? "Gemini" : "Meta"} ${value ? "enabled" : "disabled"}.`)
+      toast.success(
+        `${field === "geminiEnabled" ? "Gemini" : field === "metaEnabled" ? "Meta" : "WhatsApp"} ${value ? "enabled" : "disabled"}.`
+      )
     } catch (err) {
       setIntegrationForm((p) => ({ ...p, [field]: !value }))
       setError(err instanceof Error ? err.message : "Toggle could not be saved.")
@@ -630,13 +704,14 @@ export function SystemSettings() {
                 <div className="flex items-center justify-between rounded-xl border bg-secondary/20 p-3">
                   <div className="flex items-center gap-3">
                     {tokenCheckResult?.meta.status === "valid" ? <Wifi className="h-4 w-4 text-green-500" />
-                      : tokenCheckResult?.meta.status === "warning" || tokenCheckResult?.meta.status === "critical" ? <AlertTriangle className="h-4 w-4 text-amber-500" />
+                      : tokenCheckResult?.meta.status === "critical" ? <AlertTriangle className="h-4 w-4 text-orange-500" />
+                      : tokenCheckResult?.meta.status === "warning" ? <AlertTriangle className="h-4 w-4 text-yellow-500" />
                       : tokenCheckResult?.meta.status === "expired" || tokenCheckResult?.meta.status === "error" || tokenCheckResult?.meta.status === "invalid" ? <WifiOff className="h-4 w-4 text-red-500" />
                       : <CircleDashed className="h-4 w-4 text-muted-foreground" />}
                     <div>
                       <p className="text-sm font-medium">Meta Token</p>
                       {tokenCheckResult ? (
-                        <p className="text-xs text-muted-foreground">
+                        <p className={`text-xs ${getMetaTokenTextTone(tokenCheckResult.meta.status)}`}>
                           {tokenCheckResult.meta.status === "valid"
                             ? tokenCheckResult.meta.daysRemaining != null
                               ? `Valid (${tokenCheckResult.meta.daysRemaining} days remaining)`
@@ -654,10 +729,10 @@ export function SystemSettings() {
                   </div>
                   <Badge variant={
                     tokenCheckResult?.meta.status === "valid" ? "default"
-                    : tokenCheckResult?.meta.status === "warning" ? "secondary"
-                    : tokenCheckResult?.meta.status === "critical" || tokenCheckResult?.meta.status === "expired" ? "destructive"
+                    : tokenCheckResult?.meta.status === "warning" || tokenCheckResult?.meta.status === "critical" ? "outline"
+                    : tokenCheckResult?.meta.status === "expired" || tokenCheckResult?.meta.status === "error" || tokenCheckResult?.meta.status === "invalid" ? "destructive"
                     : "outline"
-                  } className="rounded-full px-3 shrink-0 ml-2">
+                  } className={`rounded-full px-3 shrink-0 ml-2 ${getMetaTokenBadgeTone(tokenCheckResult?.meta.status)}`}>
                     {tokenCheckResult?.meta.status === "valid" ? "Healthy"
                       : tokenCheckResult?.meta.status === "warning" ? "Warning"
                       : tokenCheckResult?.meta.status === "critical" ? "Critical"
@@ -812,11 +887,11 @@ export function SystemSettings() {
                     <Badge
                       variant={
                         tokenCheckResult?.meta.status === "valid" ? "default"
-                        : tokenCheckResult?.meta.status === "warning" ? "secondary"
-                        : tokenCheckResult?.meta.status === "critical" || tokenCheckResult?.meta.status === "expired" || tokenCheckResult?.meta.status === "error" || tokenCheckResult?.meta.status === "invalid" ? "destructive"
+                        : tokenCheckResult?.meta.status === "warning" || tokenCheckResult?.meta.status === "critical" ? "outline"
+                        : tokenCheckResult?.meta.status === "expired" || tokenCheckResult?.meta.status === "error" || tokenCheckResult?.meta.status === "invalid" ? "destructive"
                         : "outline"
                       }
-                      className="rounded-full px-3 py-1 shrink-0"
+                      className={`rounded-full px-3 py-1 shrink-0 ${getMetaTokenBadgeTone(tokenCheckResult?.meta.status)}`}
                     >
                       {tokenCheckResult?.meta.status === "valid" ? "Healthy"
                         : tokenCheckResult?.meta.status === "warning" ? "Warning"
@@ -834,7 +909,7 @@ export function SystemSettings() {
                       </span>
                     )}
                     {(tokenCheckResult?.meta.status === "warning" || tokenCheckResult?.meta.status === "critical") && (
-                      <span className="text-xs text-muted-foreground">
+                      <span className={`text-xs ${getMetaTokenTextTone(tokenCheckResult?.meta.status)}`}>
                         Expires in {tokenCheckResult.meta.daysRemaining} days
                         {tokenCheckResult.meta.expiresAt
                           ? ` (${new Date(tokenCheckResult.meta.expiresAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })})`
@@ -903,6 +978,143 @@ export function SystemSettings() {
                         Renew Token
                         <ExternalLink className="h-3.5 w-3.5" />
                       </a>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-border/60 bg-secondary/20 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium">WhatsApp Business API Credentials</p>
+                      <p className="text-xs text-muted-foreground">
+                        Phone number, access token, and the approved template used for bulk Fill Sessions outreach.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2.5">
+                      <Badge
+                        variant={summary?.integrations.whatsappConfigured && integrationForm.whatsappEnabled ? "default" : "destructive"}
+                        className="rounded-full px-3 py-1 transition-colors duration-200"
+                      >
+                        {summary?.integrations.whatsappConfigured && integrationForm.whatsappEnabled ? "Active" : "Inactive"}
+                      </Badge>
+                      <Switch
+                        checked={integrationForm.whatsappEnabled}
+                        onCheckedChange={(checked) => void toggleIntegration("whatsappEnabled", checked)}
+                        disabled={!isItSupport}
+                        className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-red-400 transition-colors duration-200 hover:ring-2 hover:ring-offset-2 hover:ring-green-300"
+                      />
+                    </div>
+                  </div>
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    This is a separate Meta product from the Instagram token above — it needs its own phone number
+                    registered to a WhatsApp Business Account, plus a message template Meta has approved for
+                    marketing use. Sends will fail with a clear error until all three fields below are filled in.
+                  </p>
+                  <div className="mt-4 grid gap-3 text-sm">
+                    <div className="space-y-2">
+                      <Label htmlFor="whatsapp-phone-id">Phone Number ID</Label>
+                      <Input
+                        id="whatsapp-phone-id"
+                        value={integrationForm.whatsappPhoneNumberId}
+                        onChange={(e) => setIntegrationForm((p) => ({ ...p, whatsappPhoneNumberId: e.target.value }))}
+                        placeholder="WhatsApp Business phone number id"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="whatsapp-business-account-id">Business Account ID</Label>
+                      <Input
+                        id="whatsapp-business-account-id"
+                        value={integrationForm.whatsappBusinessAccountId}
+                        onChange={(e) => setIntegrationForm((p) => ({ ...p, whatsappBusinessAccountId: e.target.value }))}
+                        placeholder="WABA id"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="whatsapp-token">Access Token</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          id="whatsapp-token"
+                          type={showWhatsappToken ? "text" : "password"}
+                          value={integrationForm.whatsappAccessToken}
+                          onChange={(e) => setIntegrationForm((p) => ({ ...p, whatsappAccessToken: e.target.value }))}
+                          placeholder={hasWhatsappSecret ? "Configured — enter a new token to replace" : "Enter WhatsApp access token"}
+                        />
+                        <Button type="button" variant="outline" size="icon" onClick={() => setShowWhatsappToken((v) => !v)}>
+                          {showWhatsappToken ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </Button>
+                        <Button type="button" variant="secondary" size="icon" onClick={() => void copyText(integrationForm.whatsappAccessToken, "New WhatsApp access token")} disabled={!integrationForm.whatsappAccessToken}>
+                          <Copy className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="whatsapp-template-name">Approved Template Name</Label>
+                        <Input
+                          id="whatsapp-template-name"
+                          value={integrationForm.whatsappTemplateName}
+                          onChange={(e) => setIntegrationForm((p) => ({ ...p, whatsappTemplateName: e.target.value }))}
+                          placeholder="e.g. fill_session_promo"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="whatsapp-template-language">Template Language</Label>
+                        <Input
+                          id="whatsapp-template-language"
+                          value={integrationForm.whatsappTemplateLanguage}
+                          onChange={(e) => setIntegrationForm((p) => ({ ...p, whatsappTemplateLanguage: e.target.value }))}
+                          placeholder="id"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="whatsapp-version">Graph Version</Label>
+                      <select
+                        id="whatsapp-version"
+                        value={integrationForm.whatsappGraphVersion}
+                        onChange={(e) => setIntegrationForm((p) => ({ ...p, whatsappGraphVersion: e.target.value }))}
+                        className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      >
+                        {["v25.0", "v24.0", "v23.0", "v22.0", "v21.0"].map((version) => (
+                          <option key={version} value={version}>{version}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="rounded-xl border border-border/60 bg-card/60 p-3">
+                      <Label htmlFor="whatsapp-test-phone" className="text-xs">
+                        Send a test message (uses the template above, no campaign needed)
+                      </Label>
+                      <div className="mt-2 flex gap-2">
+                        <Input
+                          id="whatsapp-test-phone"
+                          value={testPhoneNumber}
+                          onChange={(e) => setTestPhoneNumber(e.target.value)}
+                          placeholder="+628888575989"
+                          className="h-9"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5"
+                          onClick={() => void sendWhatsappTestMessage()}
+                          disabled={isSendingTestMessage || !testPhoneNumber.trim()}
+                        >
+                          {isSendingTestMessage ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                          Send Test
+                        </Button>
+                      </div>
+                      {testMessageResult ? (
+                        <p className="mt-2 text-xs text-green-600">{testMessageResult}</p>
+                      ) : null}
+                      {testMessageError ? (
+                        <p className="mt-2 text-xs text-destructive">{testMessageError}</p>
+                      ) : null}
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Save the credentials above first. This sends the configured template with no custom
+                        variables — fine for Meta&apos;s default &quot;hello_world&quot; template; use the real
+                        campaign send (Campaign KPIs) once a custom template is approved.
+                      </p>
                     </div>
                   </div>
                 </div>

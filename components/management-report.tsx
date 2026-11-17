@@ -99,25 +99,25 @@ const PRESENTATION_THEMES = [
   {
     id: "executive",
     label: "Executive Navy",
-    description: "Navy gelap + aksen emas — klasik boardroom",
+    description: "Dark navy + gold accent — classic boardroom",
     swatch: ["#0B1F3A", "#F5C451"],
   },
   {
     id: "emerald",
     label: "Forest Emerald",
-    description: "Hijau hutan + aksen lime — modern & segar",
+    description: "Forest green + lime accent — modern & fresh",
     swatch: ["#0F3D2E", "#D9F99D"],
   },
   {
     id: "slate",
     label: "Slate Modern",
-    description: "Slate gelap + aksen biru langit — bersih",
+    description: "Dark slate + sky blue accent — clean",
     swatch: ["#0F172A", "#38BDF8"],
   },
   {
     id: "burgundy",
     label: "Burgundy Classic",
-    description: "Merah anggur + aksen krem — premium",
+    description: "Wine red + cream accent — premium",
     swatch: ["#43101F", "#E8C4A0"],
   },
 ]
@@ -580,8 +580,8 @@ export function ManagementReport() {
     setIsExporting(true)
 
     const toastId = toast.loading(
-      "AI sedang menyusun presentasi manajemen dari data nyata...",
-      { description: "Proses ini bisa memakan waktu sekitar 30 detik." },
+      "AI is putting together the management presentation from real data...",
+      { description: "This can take around 30 seconds." },
     )
 
     try {
@@ -602,7 +602,7 @@ export function ManagementReport() {
       )
 
       if (!response.ok) {
-        let message = "Presentasi gagal dibuat."
+        let message = "The presentation could not be created."
         try {
           const result = await response.json()
           message = result.message || message
@@ -625,17 +625,17 @@ export function ManagementReport() {
       URL.revokeObjectURL(url)
 
       toast.dismiss(toastId)
-      toast.success("Presentasi manajemen siap", {
-        description: `${link.download} telah diunduh. Management dan Operational juga menerima notifikasi dengan file yang bisa dilihat.`,
+      toast.success("Management presentation ready", {
+        description: `${link.download} has been downloaded. Management and Operational also received a notification with a viewable file.`,
         duration: 8000,
       })
     } catch (error) {
       toast.dismiss(toastId)
-      toast.error("Gagal membuat presentasi", {
+      toast.error("Failed to create the presentation", {
         description:
           error instanceof Error
             ? error.message
-            : "Presentasi tidak dapat dibuat saat ini. Coba lagi.",
+            : "The presentation could not be created right now. Please try again.",
         duration: 6000,
       })
     } finally {
@@ -898,22 +898,22 @@ export function ManagementReport() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-primary" />
-              Export management report (PDF presentasi)
+              Export management report (presentation PDF)
             </DialogTitle>
             <DialogDescription>
-              AI (Gemini) akan menyusun presentasi landscape berisi data nyata periode{" "}
+              AI (Gemini) will put together a landscape presentation with real data for the period{" "}
               <span className="font-medium text-foreground">
-                {startDate ? new Date(`${startDate}T00:00:00`).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                {startDate ? new Date(`${startDate}T00:00:00`).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" }) : "—"}
                 {" – "}
-                {endDate ? new Date(`${endDate}T00:00:00`).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                {endDate ? new Date(`${endDate}T00:00:00`).toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" }) : "—"}
               </span>{" "}
-              lengkap dengan insight interpretatif, rencana aksi, dan slide penutup kontak MAIIN Gandaria.
+              complete with interpretive insights, an action plan, and a closing slide with MAIIN Gandaria&apos;s contact details.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-2.5">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-              Pilih tema presentasi
+              Choose a presentation theme
             </p>
             <div className="grid grid-cols-2 gap-2.5">
               {PRESENTATION_THEMES.map((theme) => {

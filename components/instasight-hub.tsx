@@ -790,21 +790,21 @@ return (
               <path d="M12 8h.01" />
             </svg>
             <div className="space-y-1">
-              <p className="font-semibold">Data tidak lengkap untuk periode ini</p>
+              <p className="font-semibold">Data is incomplete for this period</p>
               {dashboard.contentInsightsAvailability.outsideInsightRetention > 0 ? (
                 <p>
-                  Dari {dashboard.contentInsightsAvailability.totalMedia} konten di periode ini,
-                  hanya {dashboard.contentInsightsAvailability.mediaWithInsights} yang memiliki data
-                  metrik. Meta (Instagram) hanya menyimpan metrik performa konten selama sekitar 24
-                  bulan terakhir, sehingga {dashboard.contentInsightsAvailability.mediaWithoutInsights}{" "}
-                  konten yang lebih lama tetap ditampilkan tetapi tanpa views, reach, likes, dan
-                  metrik lainnya.
+                  Of {dashboard.contentInsightsAvailability.totalMedia} content items in this
+                  period, only {dashboard.contentInsightsAvailability.mediaWithInsights} have
+                  metric data. Meta (Instagram) only retains content performance metrics for
+                  roughly the last 24 months, so {dashboard.contentInsightsAvailability.mediaWithoutInsights}{" "}
+                  older content item(s) are still shown but without views, reach, likes, and
+                  other metrics.
                 </p>
               ) : (
                 <p>
-                  {dashboard.contentInsightsAvailability.mediaWithoutInsights} dari{" "}
-                  {dashboard.contentInsightsAvailability.totalMedia} konten di periode ini belum
-                  memiliki data metrik. Jalankan sync Meta agar data terbaru tersimpan.
+                  {dashboard.contentInsightsAvailability.mediaWithoutInsights} of{" "}
+                  {dashboard.contentInsightsAvailability.totalMedia} content items in this period
+                  don&apos;t have metric data yet. Run a Meta sync to store the latest data.
                 </p>
               )}
             </div>
@@ -1264,7 +1264,7 @@ return (
           <div className="rounded-lg border bg-background/70 p-3"><p className="text-xs text-muted-foreground">Total bookings</p><p className="mt-1 text-lg font-semibold">{formatNumber(campaign.totalBookingCount)}</p></div>
           <div className="rounded-lg border bg-background/70 p-3"><p className="text-xs text-muted-foreground">Customer share</p><p className="mt-1 text-lg font-semibold">{campaign.customerSharePct == null ? "Not available" : campaign.customerSharePct.toFixed(1) + "%"}</p></div>
         </div>
-        <p className="mt-3 text-sm text-muted-foreground">{campaign.insight || (campaign.customerSharePct == null ? "Customer share is unavailable for the selected period." : campaign.customerSharePct.toFixed(1) + "% pelanggan periode ini teridentifikasi booking lewat promo dari Instagram; ini adalah observasi korelasi, bukan klaim sebab-akibat.")}</p>
+        <p className="mt-3 text-sm text-muted-foreground">{campaign.insight || (campaign.customerSharePct == null ? "Customer share is unavailable for the selected period." : campaign.customerSharePct.toFixed(1) + "% of customers in this period were identified booking through an Instagram promo; this is a correlation observation, not a causal claim.")}</p>
       </div>
     ))}
   </CardContent>

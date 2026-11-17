@@ -204,6 +204,16 @@ export const fetchSegmentationSummary = async (params: {
 export const fetchSegmentationCustomers = async (params: {
   segmentName?: string
   search?: string
+  bookingTypeDominant?: string
+  recencyMin?: number
+  recencyMax?: number
+  frequencyMin?: number
+  frequencyMax?: number
+  monetaryMin?: number
+  monetaryMax?: number
+  clusterFit?: string
+  sortBy?: string
+  sortDirection?: "asc" | "desc"
   maxRecencyDays?: number
   limit?: number
   offset?: number

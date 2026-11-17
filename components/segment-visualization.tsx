@@ -1,15 +1,38 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react"
 import {
   AlertCircle,
+  AlertTriangle,
+  ArrowDown,
+  ArrowRight,
+  ArrowUp,
+  ArrowUpDown,
   BrainCircuit,
+  Calendar,
+  CheckCircle2,
   ChevronDown,
+  Clock,
+  Crown,
+  ExternalLink,
   Info,
+  Lightbulb,
+  ListFilter,
   Loader2,
   RefreshCw,
+  Repeat,
   Search,
+  Sparkles,
   Users,
+  Wallet,
+  X,
 } from "lucide-react"
 import {
   Bar,
@@ -39,11 +62,19 @@ import { getAuthHeaders } from "@/lib/roles"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import type { PageId } from "./dashboard-sidebar"
+import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
-  KpiCard,
   CardTitleTooltip,
   StateCard,
 } from "@/components/ui/card"
@@ -71,7 +102,13 @@ import {
   PaginationEllipsis,
 } from "@/components/ui/pagination"
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import {
   CUSTOMER_SEGMENT_COLORS,
+  CUSTOMER_SEGMENT_ORDER,
   SEGMENTATION_UPDATED_EVENT,
   fetchSegmentationCustomers,
   fetchSegmentationLatest,
@@ -191,6 +228,104 @@ const DEFAULT_LAST_VISIT_FILTER: LastVisitFilter = "all"
 const getLastVisitFilter = (value: LastVisitFilter) =>
   LAST_VISIT_FILTER_OPTIONS.find((option) => option.value === value) ||
   LAST_VISIT_FILTER_OPTIONS[LAST_VISIT_FILTER_OPTIONS.length - 1]
+
+type CustomerSortField =
+  | "customer"
+  | "bookingType"
+  | "recency"
+  | "frequency"
+  | "monetary"
+  | "segment"
+  | "clusterFit"
+
+type CustomerSortDirection = "asc" | "desc"
+
+interface CustomerColumnFilters {
+  bookingType: string
+  recencyBucket: string
+  frequencyMin: string
+  frequencyMax: string
+  monetaryMin: string
+  monetaryMax: string
+  clusterFit: string
+}
+
+const DEFAULT_CUSTOMER_COLUMN_FILTERS: CustomerColumnFilters = {
+  bookingType: "",
+  recencyBucket: "",
+  frequencyMin: "",
+  frequencyMax: "",
+  monetaryMin: "",
+  monetaryMax: "",
+  clusterFit: "",
+}
+
+const CUSTOMER_RECENCY_BUCKET_OPTIONS = [
+  { value: "", label: "All visits" },
+  { value: "0-30", label: "0–30 days" },
+  { value: "31-90", label: "31–90 days" },
+  { value: "91-180", label: "91–180 days" },
+  { value: "181-365", label: "181–365 days" },
+  { value: "366+", label: "365+ days" },
+] as const
+
+const CUSTOMER_BOOKING_TYPE_FILTER_OPTIONS = [
+  { value: "", label: "All types" },
+  { value: "GeloraApp Booking", label: "GeloraApp" },
+  { value: "Manual/Walk-in", label: "Manual/Walk-in" },
+  { value: "Internal", label: "Internal" },
+]
+
+const CUSTOMER_CLUSTER_FIT_FILTER_OPTIONS = [
+  { value: "", label: "All fits" },
+  { value: "representative", label: "Fit" },
+  { value: "reassigned", label: "Reassigned" },
+  { value: "mixed_borderline", label: "Borderline" },
+]
+
+const getCustomerRecencyRange = (bucket: string) => {
+  switch (bucket) {
+    case "0-30":
+      return { recencyMin: 0, recencyMax: 30 }
+    case "31-90":
+      return { recencyMin: 31, recencyMax: 90 }
+    case "91-180":
+      return { recencyMin: 91, recencyMax: 180 }
+    case "181-365":
+      return { recencyMin: 181, recencyMax: 365 }
+    case "366+":
+      return { recencyMin: 366, recencyMax: undefined }
+    default:
+      return { recencyMin: undefined, recencyMax: undefined }
+  }
+}
+
+const parseOptionalCustomerNumber = (value: string) => {
+  if (!value.trim()) return undefined
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+const hasCustomerColumnFilters = (filters: CustomerColumnFilters) =>
+  Object.values(filters).some((value) => value.trim() !== "")
+
+const CustomerSortIndicator = ({
+  active,
+  direction,
+}: {
+  active: boolean
+  direction: CustomerSortDirection
+}) => {
+  if (!active) {
+    return <ArrowUpDown className="h-3 w-3 opacity-50" aria-hidden="true" />
+  }
+
+  return direction === "asc" ? (
+    <ArrowUp className="h-3 w-3" aria-hidden="true" />
+  ) : (
+    <ArrowDown className="h-3 w-3" aria-hidden="true" />
+  )
+}
 
 const buildBusinessSegmentationMessage = (latest: SegmentationLatestData | null) => {
   if (!latest?.selectedK) {
@@ -391,7 +526,14 @@ export const HeatmapGrid = ({
   )
 }
 
-export function SegmentVisualization() {
+interface SegmentVisualizationProps {
+  onNavigate?: (page: PageId) => void
+}
+
+export function SegmentVisualization({ onNavigate }: SegmentVisualizationProps = {}) {
+  const [activeActionModal, setActiveActionModal] = useState<
+    "high-value" | "regular" | "lapsed" | "monetary" | null
+  >(null)
   const [summaryData, setSummaryData] = useState<SegmentationSummaryData | null>(null)
   const [latestData, setLatestData] = useState<SegmentationLatestData | null>(null)
   const [overviewKpi, setOverviewKpi] = useState<OverviewKpiData | null>(null)
@@ -400,6 +542,14 @@ export function SegmentVisualization() {
   const [selectedSegment, setSelectedSegment] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
+  const [customerColumnFilters, setCustomerColumnFilters] = useState<CustomerColumnFilters>(
+    DEFAULT_CUSTOMER_COLUMN_FILTERS
+  )
+  const [debouncedCustomerColumnFilters, setDebouncedCustomerColumnFilters] =
+    useState<CustomerColumnFilters>(DEFAULT_CUSTOMER_COLUMN_FILTERS)
+  const [customerSortField, setCustomerSortField] = useState<CustomerSortField | null>(null)
+  const [customerSortDirection, setCustomerSortDirection] =
+    useState<CustomerSortDirection>("asc")
   const [viewMode, setViewMode] = useState<"distribution" | "profile" | "radar">("distribution")
   // Default these detail cards to hidden
   const [showWhyThisSegment, setShowWhyThisSegment] = useState(false)
@@ -472,13 +622,14 @@ export function SegmentVisualization() {
             customerType: "All Type",
             bookingType: runScope?.filterBookingType || "all",
           })
-        : null
-
-      if (!overviewParams) {
-        setOverviewKpi(null)
-        setHeatmapSummary(null)
-        return
-      }
+        : new URLSearchParams({
+            year: String(runScope?.filterYear || 2022),
+            month: scopeMonth ? String(scopeMonth) : "All Month",
+            periodType: "MTD",
+            venue: runScope?.filterCourtType || "All Venue",
+            customerType: "All Type",
+            bookingType: runScope?.filterBookingType || "all",
+          })
 
       const [kpiResponse, playtimeResponse] = await Promise.all([
           fetch(getApiUrl(`/dashboard/overview-kpis?${overviewParams.toString()}`), {
@@ -536,8 +687,24 @@ export function SegmentVisualization() {
   }, [searchTerm])
 
   useEffect(() => {
+    const timer = setTimeout(
+      () => setDebouncedCustomerColumnFilters(customerColumnFilters),
+      350
+    )
+    return () => clearTimeout(timer)
+  }, [customerColumnFilters])
+
+  useEffect(() => {
     setCurrentPage(1)
-  }, [selectedSegment, pageSize, debouncedSearch, lastVisitFilter])
+  }, [
+    selectedSegment,
+    pageSize,
+    debouncedSearch,
+    lastVisitFilter,
+    debouncedCustomerColumnFilters,
+    customerSortField,
+    customerSortDirection,
+  ])
 
   useEffect(() => {
     if (!latestData?.run?.id) {
@@ -549,9 +716,31 @@ export function SegmentVisualization() {
     const loadCustomers = async () => {
       try {
         setIsLoadingCustomers(true)
+        const recencyRange = getCustomerRecencyRange(
+          debouncedCustomerColumnFilters.recencyBucket
+        )
         const customerResult = await fetchSegmentationCustomers({
           segmentName: selectedSegment || undefined,
           search: debouncedSearch || undefined,
+          bookingTypeDominant:
+            debouncedCustomerColumnFilters.bookingType || undefined,
+          recencyMin: recencyRange.recencyMin,
+          recencyMax: recencyRange.recencyMax,
+          frequencyMin: parseOptionalCustomerNumber(
+            debouncedCustomerColumnFilters.frequencyMin
+          ),
+          frequencyMax: parseOptionalCustomerNumber(
+            debouncedCustomerColumnFilters.frequencyMax
+          ),
+          monetaryMin: parseOptionalCustomerNumber(
+            debouncedCustomerColumnFilters.monetaryMin
+          ),
+          monetaryMax: parseOptionalCustomerNumber(
+            debouncedCustomerColumnFilters.monetaryMax
+          ),
+          clusterFit: debouncedCustomerColumnFilters.clusterFit || undefined,
+          sortBy: customerSortField || undefined,
+          sortDirection: customerSortField ? customerSortDirection : undefined,
           maxRecencyDays:
             getLastVisitFilter(lastVisitFilter).maxRecencyDays ?? undefined,
           limit: pageSize,
@@ -573,7 +762,17 @@ export function SegmentVisualization() {
     }
 
     void loadCustomers()
-  }, [latestData?.run?.id, selectedSegment, currentPage, pageSize, debouncedSearch, lastVisitFilter])
+  }, [
+    latestData?.run?.id,
+    selectedSegment,
+    currentPage,
+    pageSize,
+    debouncedSearch,
+    lastVisitFilter,
+    debouncedCustomerColumnFilters,
+    customerSortField,
+    customerSortDirection,
+  ])
 
   const clusters = useMemo(() => summaryData?.clusters || [], [summaryData])
   const activeLastVisitFilter = getLastVisitFilter(lastVisitFilter)
@@ -582,19 +781,311 @@ export function SegmentVisualization() {
     () => clusters.filter((cluster) => (cluster.customerCount || 0) > 0),
     [clusters]
   )
-  const topCluster = useMemo(
-    () =>
-      activeClusters.reduce<ClusterProfile | null>(
-        (top, cluster) =>
-          !top || (cluster.customerCount || 0) > (top.customerCount || 0)
-            ? cluster
-            : top,
-        null
-      ),
-    [activeClusters]
-  )
   const selectedCluster =
     clusters.find((cluster) => cluster.segmentName === selectedSegment) || null
+
+  const portfolioMetrics = useMemo(() => {
+    const totalCust = latestData?.totalCustomers || 0
+    if (totalCust === 0 || clusters.length === 0) {
+      return null
+    }
+
+    const totalMonitoredRevenue = clusters.reduce(
+      (sum, c) => sum + (c.customerCount || 0) * (c.avgMonetary || 0),
+      0
+    )
+
+    const highValue = clusters.find((c) => c.segmentName === "High-Value Players")
+    const regular = clusters.find((c) => c.segmentName === "Regular Players")
+    const occasional = clusters.find((c) => c.segmentName === "Occasional Players")
+    const lapsed = clusters.find((c) => c.segmentName === "Lapsed Players")
+
+    const highValueCount = highValue?.customerCount || 0
+    const highValueRevenue = highValueCount * (highValue?.avgMonetary || 0)
+    const highValueRevShare =
+      totalMonitoredRevenue > 0
+        ? (highValueRevenue / totalMonitoredRevenue) * 100
+        : 0
+    const highValueCustShare = totalCust > 0 ? (highValueCount / totalCust) * 100 : 0
+
+    const regularCount = regular?.customerCount || 0
+    const repeatCount = highValueCount + regularCount
+    const repeatRate = totalCust > 0 ? (repeatCount / totalCust) * 100 : 0
+    const occasionalCount = occasional?.customerCount || 0
+
+    const lapsedCount = lapsed?.customerCount || 0
+    const lapsedRate = totalCust > 0 ? (lapsedCount / totalCust) * 100 : 0
+    const lapsedAvgRecency = lapsed?.avgRecency || 0
+
+    const avgCustomerValue = totalCust > 0 ? totalMonitoredRevenue / totalCust : 0
+    const avgOverallFrequency =
+      totalCust > 0
+        ? clusters.reduce(
+            (sum, c) => sum + (c.customerCount || 0) * (c.avgFrequency || 0),
+            0
+          ) / totalCust
+        : 0
+
+    let highValueIntake = ""
+    let highValueAction = ""
+    if (highValueRevShare >= 50) {
+      highValueIntake = `High concentration risk: ${highValueRevShare.toFixed(1)}% of revenue depends on ${highValueCount} key players (${highValueCustShare.toFixed(1)}% of all players).`
+      highValueAction = "Focus on VIP Retention & Priority Booking"
+    } else if (highValueRevShare >= 25) {
+      highValueIntake = `Solid revenue pillar: ${highValueCount} key players contribute ${highValueRevShare.toFixed(1)}% of total venue revenue.`
+      highValueAction = "Offer Recurring Contract Incentives"
+    } else {
+      highValueIntake = `Revenue contribution is well balanced; dependency on any single account is relatively low (${highValueRevShare.toFixed(1)}%).`
+      highValueAction = "Grow Regular Players into High-Value"
+    }
+
+    let repeatIntake = ""
+    let repeatAction = ""
+    if (repeatRate >= 45) {
+      repeatIntake = `Very strong loyalty base: ${repeatRate.toFixed(1)}% of players (${repeatCount} customers) already transact regularly.`
+      repeatAction = "Offer Membership / Recurring Package"
+    } else if (repeatRate >= 25) {
+      repeatIntake = `Moderate retention (${repeatRate.toFixed(1)}%): ${occasionalCount} occasional players could be converted into regular players.`
+      repeatAction = "Send Follow-up Session Bundle Offer"
+    } else {
+      repeatIntake = `Retention needs attention: only ${repeatRate.toFixed(1)}% are regular players, most are still one-time trials.`
+      repeatAction = "Create a 14-Day Rebooking Program"
+    }
+
+    let lapsedIntake = ""
+    let lapsedAction = ""
+    if (lapsedCount > 0) {
+      lapsedIntake = `Reactivation opportunity: ${lapsedCount} players (${lapsedRate.toFixed(1)}%) have been inactive for an average of >${Math.round(lapsedAvgRecency || 180)} days.`
+      lapsedAction = `Filter ${lapsedCount} Players & Target Low-Occupancy Promo`
+    } else {
+      lapsedIntake = "Healthy portfolio: no lapsed players in this filter — all customers are actively playing."
+      lapsedAction = "Send Regular Schedule Reminder"
+    }
+
+    let avgValueIntake = ""
+    let avgValueAction = ""
+    if (avgCustomerValue > 0) {
+      avgValueIntake = `Spending benchmark: average ${formatCurrency(avgCustomerValue)} per account with ${avgOverallFrequency.toFixed(1)}x visits.`
+      avgValueAction = "Optimize Equipment Rental & Multi-Session Upsell"
+    } else {
+      avgValueIntake = "Not enough transaction history yet to measure average value per player."
+      avgValueAction = "Monitor Transaction Progress for the Period"
+    }
+
+    return {
+      totalMonitoredRevenue,
+      highValueCount,
+      highValueRevenue,
+      highValueRevShare,
+      highValueCustShare,
+      highValueIntake,
+      highValueAction,
+      regularCount,
+      repeatCount,
+      repeatRate,
+      occasionalCount,
+      repeatIntake,
+      repeatAction,
+      lapsedCount,
+      lapsedRate,
+      lapsedAvgRecency,
+      lapsedIntake,
+      lapsedAction,
+      avgCustomerValue,
+      avgOverallFrequency,
+      avgValueIntake,
+      avgValueAction,
+    }
+  }, [clusters, latestData])
+
+  const dynamicEmptySlotData = useMemo(() => {
+    const slots = heatmapSummary?.slots || []
+    const mostEmpty = heatmapSummary?.mostEmptySlot
+    const lowSessionLabel = overviewKpi?.lowSessionLabel
+
+    const dayNameMap: Record<string, string> = {
+      Sun: "Sunday",
+      Mon: "Monday",
+      Tue: "Tuesday",
+      Wed: "Wednesday",
+      Thu: "Thursday",
+      Fri: "Friday",
+      Sat: "Saturday",
+    }
+
+    const validEmptySlots = slots
+      .map((slot) => {
+        const emptyCount =
+          slot.emptySlots ?? slot.emptySessions ?? slot.session_count ?? 0
+        const occRate = slot.occupancyRate ?? null
+        return {
+          day: slot.day_short,
+          hour: slot.startHour,
+          emptyCount,
+          occupancyRate: occRate,
+        }
+      })
+      .filter(
+        (item) =>
+          item.emptyCount > 0 || (item.occupancyRate !== null && item.occupancyRate < 40)
+      )
+      .sort((a, b) => b.emptyCount - a.emptyCount)
+
+    const topSlot = validEmptySlots[0]
+
+    const primaryDay = topSlot
+      ? (dayNameMap[topSlot.day] || topSlot.day)
+      : mostEmpty?.dayLabel
+        ? (dayNameMap[mostEmpty.dayLabel] || mostEmpty.dayLabel)
+        : "Weekdays"
+
+    const primaryHour = topSlot
+      ? `${topSlot.hour}:00`
+      : mostEmpty?.hourLabel
+        ? `${mostEmpty.hourLabel}:00`
+        : lowSessionLabel || "10:00 - 15:00"
+
+    const primaryEmptyCount = topSlot?.emptyCount ?? mostEmpty?.sessionCount ?? 0
+
+    const topSlotsSummary = validEmptySlots.slice(0, 3).map((slot) => ({
+      dayLabel: dayNameMap[slot.day] || slot.day,
+      hourLabel: `${slot.hour}:00`,
+      emptySessions: slot.emptyCount,
+      occupancyText:
+        slot.occupancyRate !== null
+          ? `${Math.round(slot.occupancyRate)}% occupancy`
+          : "Empty slot",
+    }))
+
+    const runMonth = latestData?.run?.filterMonth || ""
+    const runYear = latestData?.run?.filterYear || ""
+    const periodLabel = runYear ? `${runMonth} ${runYear}` : "Current Transaction Period"
+
+    return {
+      primaryDay,
+      primaryHour,
+      primaryEmptyCount,
+      topSlotsSummary,
+      periodLabel,
+      hasDynamicSlots: validEmptySlots.length > 0 || Boolean(mostEmpty),
+    }
+  }, [heatmapSummary, overviewKpi, latestData])
+
+  const scrollToCustomerTable = (segmentName: string | null) => {
+    setSelectedSegment(segmentName)
+    setActiveActionModal(null)
+    setTimeout(() => {
+      const el = document.getElementById("customer-table-card")
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" })
+      }
+    }, 150)
+  }
+  const updateCustomerColumnFilter = (
+    key: keyof CustomerColumnFilters,
+    value: string
+  ) => {
+    setCustomerColumnFilters((current) => ({
+      ...current,
+      [key]: value,
+    }))
+  }
+
+  const handleCustomerSort = (field: CustomerSortField) => {
+    if (customerSortField !== field) {
+      setCustomerSortField(field)
+      setCustomerSortDirection("asc")
+      return
+    }
+
+    if (customerSortDirection === "asc") {
+      setCustomerSortDirection("desc")
+      return
+    }
+
+    setCustomerSortField(null)
+    setCustomerSortDirection("asc")
+  }
+
+  const clearCustomerFilters = () => {
+    setSearchTerm("")
+    setDebouncedSearch("")
+    setCustomerColumnFilters(DEFAULT_CUSTOMER_COLUMN_FILTERS)
+    setDebouncedCustomerColumnFilters(DEFAULT_CUSTOMER_COLUMN_FILTERS)
+    setSelectedSegment(null)
+    setCustomerSortField(null)
+    setCustomerSortDirection("asc")
+    setCurrentPage(1)
+  }
+
+  const hasActiveCustomerFilters = Boolean(
+    debouncedSearch ||
+      selectedSegment ||
+      hasCustomerColumnFilters(debouncedCustomerColumnFilters)
+  )
+  const hasVisibleCustomerFilters = Boolean(
+    searchTerm ||
+      selectedSegment ||
+      customerSortField ||
+      hasCustomerColumnFilters(customerColumnFilters)
+  )
+
+  const renderCustomerTableHeader = (
+    label: string,
+    field: CustomerSortField,
+    tooltip: string,
+    filterContent?: ReactNode,
+    filterActive = false
+  ) => (
+    <div className="flex items-center gap-1">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={() => handleCustomerSort(field)}
+            className="inline-flex items-center gap-1 text-left text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:text-foreground"
+            aria-label={`Sort by ${label}`}
+          >
+            <span>{label}</span>
+            <CustomerSortIndicator
+              active={customerSortField === field}
+              direction={customerSortDirection}
+            />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{tooltip}</p>
+          <p className="mt-1 text-xs opacity-80">
+            Click to sort ascending, again for descending, again to clear.
+          </p>
+        </TooltipContent>
+      </Tooltip>
+      {filterContent ? (
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              aria-label={`Filter by ${label}`}
+              className={`relative rounded-md p-1 transition-colors ${
+                filterActive
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+              }`}
+            >
+              <ListFilter className="h-3.5 w-3.5" aria-hidden="true" />
+              {filterActive ? (
+                <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+              ) : null}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-64 p-3">
+            {filterContent}
+          </PopoverContent>
+        </Popover>
+      ) : null}
+    </div>
+  )
+
   const selectedCustomers = selectedSegment
     ? customers.filter((customer) => customer.segmentName === selectedSegment)
     : customers
@@ -711,23 +1202,6 @@ export function SegmentVisualization() {
     return <EmptyState />
   }
 
-  const previousTotalCustomers = latestData.previousRun?.totalCustomers || 0
-  const totalCustomersChange = latestData.totalCustomers - previousTotalCustomers
-  const unfilteredTotalCustomers =
-    latestData.unfilteredTotalCustomers ?? latestData.totalCustomers
-  const topThreeShare =
-    latestData.totalCustomers > 0
-      ? Math.round(
-          (activeClusters
-            .slice()
-            .sort((left, right) => (right.customerCount || 0) - (left.customerCount || 0))
-            .slice(0, 3)
-            .reduce((sum, cluster) => sum + (cluster.customerCount || 0), 0) /
-            latestData.totalCustomers) *
-            100
-        )
-      : null
-
   return (
     <TooltipProvider>
       <div className="space-y-6">
@@ -783,50 +1257,205 @@ export function SegmentVisualization() {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <KpiCard
-            label={isRecencyFiltered ? "Reachable Customers" : "Total Customers"}
-            tooltip={
-              isRecencyFiltered
-                ? `Customers whose latest completed booking falls within the ${activeLastVisitFilter.label.toLowerCase()} window.`
-                : "Total number of unique customers identified from transaction data."
-            }
-            value={formatNumber(latestData.totalCustomers, 0)}
-            changeLabel={
-              isRecencyFiltered
-                ? `${formatNumber(latestData.totalCustomers, 0)} of ${formatNumber(unfilteredTotalCustomers, 0)} customers in the latest run`
-                : previousTotalCustomers
-                  ? `${formatChange((totalCustomersChange / previousTotalCustomers) * 100)} vs last month`
-                  : "No comparison available"
-            }
-            icon={Users}
-            iconClassName={
-              !isRecencyFiltered && totalCustomersChange < 0
-                ? "text-destructive"
-                : "text-emerald-600"
-            }
-          />
-          <KpiCard
-            label="Top Segment"
-            tooltip="The customer segment with the largest population in the current view."
-            value={topCluster?.segmentName || "-"}
-            changeLabel={
-              topCluster && latestData.totalCustomers > 0
-                ? `${Math.round(((topCluster.customerCount || 0) / latestData.totalCustomers) * 100)}% of customers`
-                : "No customers in this view"
-            }
-          />
-          <KpiCard
-            label="Top 3 Segment Share"
-            tooltip="Combined customer share of the three largest segments — indicates concentration."
-            value={topThreeShare !== null ? `${topThreeShare}%` : "-"}
-            changeLabel="Share of customers in top 3 segments"
-          />
-          <KpiCard
-            label="Active Segments"
-            tooltip="Number of distinct customer segments with at least one customer in the current view."
-            value={activeClusters.length}
-            changeLabel={selectedCluster?.segmentName || "No segment selected"}
-          />
+          {/* Card 1: High-Value Revenue Share */}
+          <Card className="flex flex-col justify-between border-border bg-card shadow-sm transition-all hover:shadow-md">
+            <CardHeader className="pb-2">
+              <div className="flex items-start justify-between gap-2">
+                <CardTitleTooltip
+                  title="High-Value Revenue Share"
+                  tooltip="Percentage of total venue revenue generated by the High-Value Players segment."
+                  className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                />
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600">
+                  <Crown className="h-4 w-4" />
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3 pt-0">
+              <div>
+                <p className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+                  {portfolioMetrics ? `${portfolioMetrics.highValueRevShare.toFixed(1)}%` : "-"}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {portfolioMetrics
+                    ? `${formatCurrency(portfolioMetrics.highValueRevenue)} (${portfolioMetrics.highValueCount} key players)`
+                    : "Calculating revenue contribution..."}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-amber-200/60 bg-amber-50/50 p-2.5 text-xs text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
+                <div className="flex items-center gap-1.5 font-medium">
+                  <Lightbulb className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+                  <span>Key Intake</span>
+                </div>
+                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                  {portfolioMetrics?.highValueIntake || "Analyzing revenue profile..."}
+                </p>
+              </div>
+
+              <div className="pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => setActiveActionModal("high-value")}
+                  className="group flex w-full items-center justify-between rounded-lg border border-border bg-secondary/50 px-2.5 py-1.5 text-left text-xs font-medium text-foreground transition-all hover:border-amber-300 hover:bg-amber-50 hover:text-amber-900 dark:hover:bg-amber-950/30 dark:hover:text-amber-200"
+                  title="Click to open the VIP Retention Action Plan"
+                >
+                  <span className="truncate pr-1">🎯 {portfolioMetrics?.highValueAction || "Focus on VIP Retention"}</span>
+                  <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                </button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Card 2: Repeat Player Rate */}
+          <Card className="flex flex-col justify-between border-border bg-card shadow-sm transition-all hover:shadow-md">
+            <CardHeader className="pb-2">
+              <div className="flex items-start justify-between gap-2">
+                <CardTitleTooltip
+                  title="Repeat Player Rate"
+                  tooltip="Percentage of regular customers (High-Value + Regular Players) out of the total player population."
+                  className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                />
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600">
+                  <Repeat className="h-4 w-4" />
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3 pt-0">
+              <div>
+                <p className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+                  {portfolioMetrics ? `${portfolioMetrics.repeatRate.toFixed(1)}%` : "-"}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {portfolioMetrics
+                    ? `${portfolioMetrics.repeatCount} of ${latestData.totalCustomers} active regular players`
+                    : "Calculating retention..."}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-emerald-200/60 bg-emerald-50/50 p-2.5 text-xs text-emerald-950 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-200">
+                <div className="flex items-center gap-1.5 font-medium">
+                  <Lightbulb className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                  <span>Key Intake</span>
+                </div>
+                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                  {portfolioMetrics?.repeatIntake || "Analyzing retention..."}
+                </p>
+              </div>
+
+              <div className="pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => setActiveActionModal("regular")}
+                  className="group flex w-full items-center justify-between rounded-lg border border-border bg-secondary/50 px-2.5 py-1.5 text-left text-xs font-medium text-foreground transition-all hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-900 dark:hover:bg-emerald-950/30 dark:hover:text-emerald-200"
+                  title="Click to open the Regular Players Action Plan"
+                >
+                  <span className="truncate pr-1">🎯 {portfolioMetrics?.repeatAction || "Offer Recurring Membership"}</span>
+                  <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                </button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Card 3: At-Risk / Lapsed Players */}
+          <Card className="flex flex-col justify-between border-border bg-card shadow-sm transition-all hover:shadow-md">
+            <CardHeader className="pb-2">
+              <div className="flex items-start justify-between gap-2">
+                <CardTitleTooltip
+                  title="At-Risk / Lapsed Base"
+                  tooltip="Count and percentage of customers who haven't booked again in a long time (at risk of total churn)."
+                  className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                />
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-rose-500/10 text-rose-600">
+                  <AlertTriangle className="h-4 w-4" />
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3 pt-0">
+              <div>
+                <p className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+                  {portfolioMetrics ? `${portfolioMetrics.lapsedCount} Players` : "-"}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {portfolioMetrics
+                    ? `${portfolioMetrics.lapsedRate.toFixed(1)}% of the total player population`
+                    : "Calculating churn..."}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-rose-200/60 bg-rose-50/50 p-2.5 text-xs text-rose-950 dark:border-rose-900/40 dark:bg-rose-950/20 dark:text-rose-200">
+                <div className="flex items-center gap-1.5 font-medium">
+                  <Lightbulb className="h-3.5 w-3.5 shrink-0 text-rose-600" />
+                  <span>Key Intake</span>
+                </div>
+                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                  {portfolioMetrics?.lapsedIntake || "Analyzing churn risk..."}
+                </p>
+              </div>
+
+              <div className="pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => setActiveActionModal("lapsed")}
+                  className="group flex w-full items-center justify-between rounded-lg border border-border bg-secondary/50 px-2.5 py-1.5 text-left text-xs font-medium text-foreground transition-all hover:border-rose-300 hover:bg-rose-50 hover:text-rose-900 dark:hover:bg-rose-950/30 dark:hover:text-rose-200"
+                  title="Click to open the Lapsed Reactivation Action Plan"
+                >
+                  <span className="truncate pr-1">🎯 {portfolioMetrics?.lapsedAction || "Filter & Blast Low-Occupancy Promo"}</span>
+                  <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                </button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Card 4: Avg Customer Value */}
+          <Card className="flex flex-col justify-between border-border bg-card shadow-sm transition-all hover:shadow-md">
+            <CardHeader className="pb-2">
+              <div className="flex items-start justify-between gap-2">
+                <CardTitleTooltip
+                  title="Avg Customer Value"
+                  tooltip="Average accumulated spending value (monetary) per customer across all monitored segments."
+                  className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                />
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/10 text-sky-600">
+                  <Wallet className="h-4 w-4" />
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3 pt-0">
+              <div>
+                <p className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+                  {portfolioMetrics ? formatCurrency(portfolioMetrics.avgCustomerValue) : "-"}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {portfolioMetrics
+                    ? `Average ${portfolioMetrics.avgOverallFrequency.toFixed(1)}x bookings per customer`
+                    : "Calculating average..."}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-sky-200/60 bg-sky-50/50 p-2.5 text-xs text-sky-950 dark:border-sky-900/40 dark:bg-sky-950/20 dark:text-sky-200">
+                <div className="flex items-center gap-1.5 font-medium">
+                  <Lightbulb className="h-3.5 w-3.5 shrink-0 text-sky-600" />
+                  <span>Key Intake</span>
+                </div>
+                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                  {portfolioMetrics?.avgValueIntake || "Analyzing customer value..."}
+                </p>
+              </div>
+
+              <div className="pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => setActiveActionModal("monetary")}
+                  className="group flex w-full items-center justify-between rounded-lg border border-border bg-secondary/50 px-2.5 py-1.5 text-left text-xs font-medium text-foreground transition-all hover:border-sky-300 hover:bg-sky-50 hover:text-sky-900 dark:hover:bg-sky-950/30 dark:hover:text-sky-200"
+                  title="Click to open the ARPU Upsell Action Plan"
+                >
+                  <span className="truncate pr-1">🎯 {portfolioMetrics?.avgValueAction || "Review All Segments"}</span>
+                  <ArrowRight className="h-3 w-3 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+                </button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         <Card className="border-border bg-card shadow-sm">
@@ -874,7 +1503,7 @@ export function SegmentVisualization() {
           </CardContent>
         </Card>
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,1fr)]">
+        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,1fr)]">
           <Card className="border-border bg-card shadow-sm">
             <CardHeader className="pb-4">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -1076,7 +1705,7 @@ export function SegmentVisualization() {
 
         {/* Segment Playbook removed per request */}
 
-        <Card className="border-border bg-card shadow-sm">
+        <Card id="customer-table-card" className="border-border bg-card shadow-sm">
           <CardHeader>
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
@@ -1112,7 +1741,7 @@ export function SegmentVisualization() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="mb-4 flex flex-wrap gap-2">
+            <div className="mb-4 flex flex-wrap items-center gap-2">
               <Badge variant="outline" className="rounded-full bg-secondary/40 px-3 py-1">
                 Selected Segment: {selectedSegment || "All segments"}
               </Badge>
@@ -1128,10 +1757,21 @@ export function SegmentVisualization() {
                   type="text"
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Search by name or customer ID..."
+                  placeholder="Search name or customer ID..."
+                  aria-label="Search customer name or ID"
                   className="h-9 w-full rounded-full border border-border bg-background pl-9 pr-3 text-sm outline-none transition-colors focus:border-primary focus:ring-1 focus:ring-primary/30"
                 />
               </div>
+              {hasVisibleCustomerFilters ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearCustomerFilters}
+                >
+                  <X className="mr-1.5 h-4 w-4" />
+                  Clear filters
+                </Button>
+              ) : null}
             </div>
             <p className="mb-4 text-sm text-muted-foreground">
               This table is built from completed payments and manual/walk-in bookings only, so the records shown here are already filtered for business use.
@@ -1146,13 +1786,13 @@ export function SegmentVisualization() {
                 <Users className="h-10 w-10 text-muted-foreground/50" />
                 <div className="text-center">
                   <p className="font-medium">
-                    {debouncedSearch
-                      ? "No customers match your search."
+                    {hasActiveCustomerFilters
+                      ? "No customers match your filters."
                       : "No customer rows available."}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {debouncedSearch
-                      ? "Try a different name or customer ID, or clear the search."
+                    {hasActiveCustomerFilters
+                      ? "Try widening a filter or clearing the column filters."
                       : "Try another segment or refresh the latest segmentation run."}
                   </p>
                 </div>
@@ -1176,67 +1816,199 @@ export function SegmentVisualization() {
                     </select>
                   </label>
                 </div>
+                <div className="overflow-x-auto">
+                  <div className="min-w-[980px]">
                 <div className="border-b border-border bg-gradient-to-r from-background to-secondary/20 px-4 py-3">
-                  <div className="grid grid-cols-[1.6fr_1fr_1fr_1fr_1fr_0.8fr_1fr] gap-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div>Customer</div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Customer name and key for each profile.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div>Booking Type</div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Dominant booking type for the customer in this run.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div>Last Visit</div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Days since the customer&apos;s most recent completed booking.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div>Frequency</div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Number of visits or bookings for the customer.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div>Value</div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Monetary value of bookings associated with the customer.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div>Segment</div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Assigned customer segment from the latest model run.</p>
-                      </TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div>Cluster Fit</div>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Distance from the customer to the assigned cluster centroid; larger outliers may be borderline.</p>
-                      </TooltipContent>
-                    </Tooltip>
+                  <div className="grid grid-cols-[1.6fr_1fr_1fr_1fr_1fr_0.8fr_1fr] items-center gap-3">
+                    {renderCustomerTableHeader(
+                      "Customer",
+                      "customer",
+                      "Customer name and key for each profile."
+                    )}
+                    {renderCustomerTableHeader(
+                      "Booking Type",
+                      "bookingType",
+                      "Dominant booking type for the customer in this run.",
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                          Booking type
+                        </p>
+                        <select
+                          value={customerColumnFilters.bookingType}
+                          onChange={(event) =>
+                            updateCustomerColumnFilter("bookingType", event.target.value)
+                          }
+                          aria-label="Filter by booking type"
+                          className="h-9 w-full rounded-lg border border-border bg-background px-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
+                        >
+                          {CUSTOMER_BOOKING_TYPE_FILTER_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>,
+                      Boolean(customerColumnFilters.bookingType)
+                    )}
+                    {renderCustomerTableHeader(
+                      "Last Visit",
+                      "recency",
+                      "Days since the customer's most recent completed booking.",
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                          Last visit
+                        </p>
+                        <select
+                          value={customerColumnFilters.recencyBucket}
+                          onChange={(event) =>
+                            updateCustomerColumnFilter("recencyBucket", event.target.value)
+                          }
+                          aria-label="Filter by last visit"
+                          className="h-9 w-full rounded-lg border border-border bg-background px-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
+                        >
+                          {CUSTOMER_RECENCY_BUCKET_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>,
+                      Boolean(customerColumnFilters.recencyBucket)
+                    )}
+                    {renderCustomerTableHeader(
+                      "Frequency",
+                      "frequency",
+                      "Number of visits or bookings for the customer.",
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                          Frequency
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={customerColumnFilters.frequencyMin}
+                            onChange={(event) =>
+                              updateCustomerColumnFilter("frequencyMin", event.target.value)
+                            }
+                            placeholder="Min visits"
+                            aria-label="Minimum frequency"
+                            className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-background px-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            value={customerColumnFilters.frequencyMax}
+                            onChange={(event) =>
+                              updateCustomerColumnFilter("frequencyMax", event.target.value)
+                            }
+                            placeholder="Max visits"
+                            aria-label="Maximum frequency"
+                            className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-background px-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
+                          />
+                        </div>
+                      </div>,
+                      Boolean(
+                        customerColumnFilters.frequencyMin ||
+                          customerColumnFilters.frequencyMax
+                      )
+                    )}
+                    {renderCustomerTableHeader(
+                      "Value",
+                      "monetary",
+                      "Monetary value of bookings associated with the customer.",
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                          Value (Rp)
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min="0"
+                            step="1000"
+                            value={customerColumnFilters.monetaryMin}
+                            onChange={(event) =>
+                              updateCustomerColumnFilter("monetaryMin", event.target.value)
+                            }
+                            placeholder="Min"
+                            aria-label="Minimum monetary value"
+                            className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-background px-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
+                          />
+                          <input
+                            type="number"
+                            min="0"
+                            step="1000"
+                            value={customerColumnFilters.monetaryMax}
+                            onChange={(event) =>
+                              updateCustomerColumnFilter("monetaryMax", event.target.value)
+                            }
+                            placeholder="Max"
+                            aria-label="Maximum monetary value"
+                            className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-background px-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
+                          />
+                        </div>
+                      </div>,
+                      Boolean(
+                        customerColumnFilters.monetaryMin ||
+                          customerColumnFilters.monetaryMax
+                      )
+                    )}
+                    {renderCustomerTableHeader(
+                      "Segment",
+                      "segment",
+                      "Assigned customer segment from the latest model run.",
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                          Segment
+                        </p>
+                        <select
+                          value={selectedSegment || ""}
+                          onChange={(event) =>
+                            setSelectedSegment(event.target.value || null)
+                          }
+                          aria-label="Filter by segment"
+                          className="h-9 w-full rounded-lg border border-border bg-background px-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
+                        >
+                          <option value="">All segments</option>
+                          {CUSTOMER_SEGMENT_ORDER.map((segment) => (
+                            <option key={segment} value={segment}>
+                              {segment}
+                            </option>
+                          ))}
+                        </select>
+                      </div>,
+                      Boolean(selectedSegment)
+                    )}
+                    {renderCustomerTableHeader(
+                      "Cluster Fit",
+                      "clusterFit",
+                      "Distance from the customer to the assigned cluster centroid; larger outliers may be borderline.",
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                          Cluster fit
+                        </p>
+                        <select
+                          value={customerColumnFilters.clusterFit}
+                          onChange={(event) =>
+                            updateCustomerColumnFilter("clusterFit", event.target.value)
+                          }
+                          aria-label="Filter by cluster fit"
+                          className="h-9 w-full rounded-lg border border-border bg-background px-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
+                        >
+                          {CUSTOMER_CLUSTER_FIT_FILTER_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>,
+                      Boolean(customerColumnFilters.clusterFit)
+                    )}
                   </div>
                 </div>
-                <div className="max-h-[560px] overflow-y-auto">
+                <div>
                   <div className="divide-y divide-border/60">
                     {customers.map((customer, index) => {
                       const scoreTone =
@@ -1300,6 +2072,8 @@ export function SegmentVisualization() {
                     })}
                   </div>
                 </div>
+                </div>
+                </div>
                 {totalPages > 1 ? (
                   <div className="border-t border-border bg-background/80 px-4 py-3">
                     <Pagination className="justify-between gap-4">
@@ -1357,6 +2131,353 @@ export function SegmentVisualization() {
             )}
           </CardContent>
         </Card>
+
+        {/* Dynamic Action Plan Modal Dialog */}
+        <Dialog
+          open={activeActionModal !== null}
+          onOpenChange={(open) => !open && setActiveActionModal(null)}
+        >
+          <DialogContent className="max-w-xl">
+            {activeActionModal === "lapsed" && (
+              <>
+                <DialogHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-500/10 text-rose-600">
+                      <AlertTriangle className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <DialogTitle className="text-lg font-bold">
+                        Action Plan: Reactivate {portfolioMetrics?.lapsedCount || 0} Lapsed Players
+                      </DialogTitle>
+                      <DialogDescription className="text-xs">
+                        Low-occupancy fill strategy based on Maiin Gandaria&apos;s real utilization data.
+                      </DialogDescription>
+                    </div>
+                  </div>
+                </DialogHeader>
+
+                <div className="space-y-4 py-2">
+                  {/* Dynamic Empty Slots Section */}
+                  <div className="rounded-xl border border-rose-200/70 bg-gradient-to-br from-rose-50/60 to-background p-3.5 text-xs dark:border-rose-900/40 dark:bg-rose-950/20">
+                    <div className="flex items-center gap-2 font-semibold text-rose-900 dark:text-rose-200">
+                      <Calendar className="h-4 w-4 text-rose-600" />
+                      <span>Detected Empty Slot Target ({dynamicEmptySlotData.periodLabel}):</span>
+                    </div>
+
+                    {dynamicEmptySlotData.topSlotsSummary.length > 0 ? (
+                      <div className="mt-2.5 space-y-2">
+                        <p className="text-[11px] text-muted-foreground">
+                          Based on heatmap utilization data, the following slots have the lowest occupancy and are the most effective to target with a promo:
+                        </p>
+                        <div className="flex flex-wrap gap-2 pt-1">
+                          {dynamicEmptySlotData.topSlotsSummary.map((slot, idx) => (
+                            <Badge
+                              key={idx}
+                              variant="outline"
+                              className="border-rose-300 bg-background font-medium text-rose-900 dark:border-rose-800 dark:text-rose-200"
+                            >
+                              <Clock className="mr-1 h-3 w-3 text-rose-600" />
+                              {slot.dayLabel} {slot.hourLabel} • {slot.emptySessions > 0 ? `${slot.emptySessions} empty session(s)` : slot.occupancyText}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="mt-2 text-[11px] text-muted-foreground">
+                        We recommend targeting the low-occupancy weekday slot ({dynamicEmptySlotData.primaryDay} at {dynamicEmptySlotData.primaryHour}) when court occupancy tends to drop.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Execution Steps */}
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Operational Execution Steps
+                    </p>
+                    <div className="space-y-1.5 text-xs text-foreground">
+                      <div className="flex items-start gap-2">
+                        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                        <span>
+                          <strong>Prepare a Special Voucher:</strong> 20%–25% discount, limited to the low-occupancy slot above ({dynamicEmptySlotData.primaryDay} {dynamicEmptySlotData.primaryHour}).
+                        </span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                        <span>
+                          <strong>Filter & Collect Contacts:</strong> Get the phone numbers of {portfolioMetrics?.lapsedCount || 0} players from the customer table below.
+                        </span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                        <span>
+                          <strong>Send a Friendly Broadcast:</strong> Send a short offer or launch a campaign through the <em>Fill Sessions</em> module.
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Copywriting Template */}
+                  <div className="rounded-xl border border-border bg-muted/30 p-3 text-xs">
+                    <p className="font-semibold text-foreground">WhatsApp Message Draft (Ready to Send):</p>
+                    <p className="mt-1.5 italic text-muted-foreground">
+                      &quot;Halo Kak [Nama Customer]! 👋 Kangen serunya main di Maiin Gandaria. Khusus minggu ini ada voucher spesial diskon 20% untuk main di hari {dynamicEmptySlotData.primaryDay} jam {dynamicEmptySlotData.primaryHour}. Yuk klaim jadwalmu via GeloraApp / kasir kami!&quot;
+                    </p>
+                  </div>
+                </div>
+
+                <DialogFooter className="gap-2 sm:justify-between">
+                  <Button variant="outline" size="sm" onClick={() => setActiveActionModal(null)}>
+                    Close
+                  </Button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => scrollToCustomerTable("Lapsed Players")}
+                    >
+                      <Users className="mr-1.5 h-3.5 w-3.5" />
+                      View {portfolioMetrics?.lapsedCount || 0} Contacts in Table
+                    </Button>
+                    {onNavigate && (
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setActiveActionModal(null)
+                          onNavigate("targeting")
+                        }}
+                      >
+                        <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                        Open Fill Sessions
+                      </Button>
+                    )}
+                  </div>
+                </DialogFooter>
+              </>
+            )}
+
+            {activeActionModal === "high-value" && (
+              <>
+                <DialogHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600">
+                      <Crown className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <DialogTitle className="text-lg font-bold">
+                        Action Plan: VIP Retention & Recurring Contracts
+                      </DialogTitle>
+                      <DialogDescription className="text-xs">
+                        Securing {portfolioMetrics ? `${portfolioMetrics.highValueRevShare.toFixed(1)}%` : "-"} of venue revenue from {portfolioMetrics?.highValueCount || 0} key player accounts.
+                      </DialogDescription>
+                    </div>
+                  </div>
+                </DialogHeader>
+
+                <div className="space-y-4 py-2">
+                  <div className="rounded-xl border border-amber-200/70 bg-gradient-to-br from-amber-50/60 to-background p-3.5 text-xs dark:border-amber-900/40 dark:bg-amber-950/20">
+                    <p className="font-semibold text-amber-900 dark:text-amber-200">
+                      Revenue Protection Urgency:
+                    </p>
+                    <p className="mt-1 text-muted-foreground leading-relaxed">
+                      High-value players (such as sports academies or regular clubs) contribute {formatCurrency(portfolioMetrics?.highValueRevenue)} in revenue. Losing a single community account can directly affect monthly cash flow stability.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Recommended Recurring Contract Incentive Package
+                    </p>
+                    <div className="space-y-2 text-xs text-foreground">
+                      <div className="flex items-start gap-2">
+                        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                        <div>
+                          <strong>Slot Lock Guarantee (Prime-Time Lock):</strong>
+                          <p className="text-muted-foreground">Lock in their favorite weekly recurring schedule for 3–6 months so it can&apos;t be taken by public bookings.</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                        <div>
+                          <strong>Upfront Payment Commitment Discount:</strong>
+                          <p className="text-muted-foreground">Give a 10%–15% discount specifically for 3- or 6-month commitment package payments.</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                        <div>
+                          <strong>Exclusive Supporting Facilities:</strong>
+                          <p className="text-muted-foreground">Tournament-standard ball loans, ready-to-use training vests, and a dedicated team water dispenser.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <DialogFooter className="gap-2 sm:justify-between">
+                  <Button variant="outline" size="sm" onClick={() => setActiveActionModal(null)}>
+                    Close
+                  </Button>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => scrollToCustomerTable("High-Value Players")}
+                  >
+                    <Users className="mr-1.5 h-3.5 w-3.5" />
+                    View {portfolioMetrics?.highValueCount || 0} Key Players in Table
+                  </Button>
+                </DialogFooter>
+              </>
+            )}
+
+            {activeActionModal === "regular" && (
+              <>
+                <DialogHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600">
+                      <Repeat className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <DialogTitle className="text-lg font-bold">
+                        Action Plan: Membership Package & Loyalty Habit
+                      </DialogTitle>
+                      <DialogDescription className="text-xs">
+                        Maintaining a {portfolioMetrics ? `${portfolioMetrics.repeatRate.toFixed(1)}%` : "-"} regular player ratio ({portfolioMetrics?.repeatCount || 0} active accounts).
+                      </DialogDescription>
+                    </div>
+                  </div>
+                </DialogHeader>
+
+                <div className="space-y-4 py-2">
+                  <div className="rounded-xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/60 to-background p-3.5 text-xs dark:border-emerald-900/40 dark:bg-emerald-950/20">
+                    <p className="font-semibold text-emerald-900 dark:text-emerald-200">
+                      Venue Retention Health:
+                    </p>
+                    <p className="mt-1 text-muted-foreground leading-relaxed">
+                      The regular player base is the backbone of weekly operations. Besides nurturing {portfolioMetrics?.repeatCount || 0} loyal players, there are {portfolioMetrics?.occasionalCount || 0} occasional players ready to be converted into repeat customers.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Recurring Schedule Lock-in Initiatives
+                    </p>
+                    <div className="space-y-2 text-xs text-foreground">
+                      <div className="flex items-start gap-2">
+                        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                        <div>
+                          <strong>Monthly 4-Session Package:</strong>
+                          <p className="text-muted-foreground">Buying a 4-session monthly package includes free racket/ball rental or a 10% discount.</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                        <div>
+                          <strong>Facilitate Inter-Community Sparring:</strong>
+                          <p className="text-muted-foreground">Help connect regular teams for friendly matches during Maiin Gandaria&apos;s rental hours.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <DialogFooter className="gap-2 sm:justify-between">
+                  <Button variant="outline" size="sm" onClick={() => setActiveActionModal(null)}>
+                    Close
+                  </Button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => scrollToCustomerTable("Regular Players")}
+                    >
+                      <Users className="mr-1.5 h-3.5 w-3.5" />
+                      View Regular Players in Table
+                    </Button>
+                    {onNavigate && (
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setActiveActionModal(null)
+                          onNavigate("genai")
+                        }}
+                      >
+                        <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                        Create Strategy in GenAI
+                      </Button>
+                    )}
+                  </div>
+                </DialogFooter>
+              </>
+            )}
+
+            {activeActionModal === "monetary" && (
+              <>
+                <DialogHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600">
+                      <Wallet className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <DialogTitle className="text-lg font-bold">
+                        Action Plan: Optimize Average Revenue Per Customer (ARPU)
+                      </DialogTitle>
+                      <DialogDescription className="text-xs">
+                        Increasing average spend from a baseline of {formatCurrency(portfolioMetrics?.avgCustomerValue)}.
+                      </DialogDescription>
+                    </div>
+                  </div>
+                </DialogHeader>
+
+                <div className="space-y-4 py-2">
+                  <div className="rounded-xl border border-sky-200/70 bg-gradient-to-br from-sky-50/60 to-background p-3.5 text-xs dark:border-sky-900/40 dark:bg-sky-950/20">
+                    <p className="font-semibold text-sky-900 dark:text-sky-200">
+                      Customer Economic Value Baseline:
+                    </p>
+                    <p className="mt-1 text-muted-foreground leading-relaxed">
+                      Average spend per customer ID is currently {formatCurrency(portfolioMetrics?.avgCustomerValue)} with an average frequency of {portfolioMetrics?.avgOverallFrequency.toFixed(1)}x bookings. Increasing spend per session can be achieved through duration and add-on facility upselling.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Tactics to Increase Transaction Value Per Visit
+                    </p>
+                    <div className="space-y-2 text-xs text-foreground">
+                      <div className="flex items-start gap-2">
+                        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                        <div>
+                          <strong>Session Extension:</strong>
+                          <p className="text-muted-foreground">Offer a 30% discount for adding a second or third hour if the next slot is still open.</p>
+                        </div>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                        <div>
+                          <strong>Equipment & Beverage Rental Bundle:</strong>
+                          <p className="text-muted-foreground">The court rental package directly includes premium racket rental, new balls/shuttlecocks, and a beverage package.</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <DialogFooter className="gap-2 sm:justify-between">
+                  <Button variant="outline" size="sm" onClick={() => setActiveActionModal(null)}>
+                    Close
+                  </Button>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => scrollToCustomerTable(null)}
+                  >
+                    <Users className="mr-1.5 h-3.5 w-3.5" />
+                    Review All Customers in Table
+                  </Button>
+                </DialogFooter>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </TooltipProvider>
   )

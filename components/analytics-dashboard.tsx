@@ -1942,13 +1942,13 @@ const revenueXAxisTicks = useMemo(() => {
               </CardContent>
             </Card>
 
-            <Card className="border-border bg-card shadow-sm">
+            <Card className="h-full border-border bg-card shadow-sm">
               <CardHeader>
                 <CardTitle><TitleWithTooltip title="Valid Booking Status" tooltip="Shows the distribution of completed bookings and operational sessions grouped by status type." /></CardTitle>
                 <CardDescription>Breakdown of Payment Completed, Manual/Walk-in, and Internal bookings.</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="h-[280px]">
+              <CardContent className="flex flex-1 flex-col gap-4">
+                <div className="min-h-[280px] min-w-0 flex-1">
                   {bookingTypeMixLegend.length === 0 ? (
                     <div className="flex h-full items-center justify-center text-center text-sm text-muted-foreground">
                       No booking type mix is available for the selected period.
@@ -1956,7 +1956,7 @@ const revenueXAxisTicks = useMemo(() => {
                   ) : (
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
-                        <Pie data={bookingTypeMixLegend} dataKey="value" nameKey="name" innerRadius={72} outerRadius={108} labelLine={false} label={pieLabelRenderer}>
+                        <Pie data={bookingTypeMixLegend} dataKey="value" nameKey="name" innerRadius={0} outerRadius="80%" labelLine={false} label={pieLabelRenderer}>
                           {bookingTypeMixLegend.map((entry) => <Cell key={entry.key} fill={entry.color} />)}
                         </Pie>
                         <RechartsTooltip formatter={(value: number, _name: string, props: { payload?: { percentage?: number; name?: string } }) => [`${value} bookings (${formatPercent(props.payload?.percentage || 0)})`, props.payload?.name || "Booking Type"]} />
@@ -2000,9 +2000,9 @@ const revenueXAxisTicks = useMemo(() => {
             <CardTitle><TitleWithTooltip title="Play-Time Preference" tooltip="Shows how bookings are distributed across morning, afternoon, evening, and night." /></CardTitle>
               <CardDescription>{playtimeBehaviorInsight}</CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-                <div className="h-[320px]">
+            <CardContent className="space-y-4">
+              <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)] xl:items-start">
+                <div className="h-[320px] min-w-0">
                   {playtimeChart.every((item) => item.value === 0) || playtimeChart.length === 0 ? (
                     <div className="flex h-full items-center justify-center text-center text-sm text-muted-foreground">
                       No time preference data yet. Load data for the selected period to see which times are most popular.
@@ -2027,7 +2027,7 @@ const revenueXAxisTicks = useMemo(() => {
                     </ResponsiveContainer>
                   )}
                 </div>
-                <div className="space-y-3">
+                <div className="min-w-0 space-y-3">
                   <div className="rounded-2xl border border-border bg-primary/5 p-4">
                     <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">Dominant Historical Preference</p>
                     <p className="mt-2 text-lg font-semibold text-slate-900">{dominantPlaytime?.name || "-"}</p>
@@ -2040,26 +2040,28 @@ const revenueXAxisTicks = useMemo(() => {
                   <div className="rounded-xl border border-border bg-secondary/20 p-4 text-sm text-muted-foreground">
                     This chart shows past bookings by time of day. Use it to see which times are usually busy before planning promotions.
                   </div>
-                  {playtimeLegend.map((item) => (
-                    <div key={item.name} className="rounded-xl border border-border bg-secondary/20 p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <span className="mt-1 inline-flex h-3 w-3 rounded-full" style={{ backgroundColor: item.color }} />
-                          <div>
-                            <p className="font-medium text-slate-900">{item.name}</p>
-                            <p className="text-xs text-muted-foreground">{formatPercent(item.percentage)} of historical booked sessions</p>
-                          </div>
-                        </div>
-                        <p className="text-sm font-semibold text-slate-900">{item.value.toLocaleString("en-US")}</p>
-                      </div>
-                    </div>
-                  ))}
                   {playtimeData ? (
                     <div className="rounded-xl border border-border bg-secondary/20 p-4 text-sm text-muted-foreground">
                       {playtimeData.totalSessions.toLocaleString("en-US")} sessions across {playtimeData.totalCustomers.toLocaleString("en-US")} customers{playtimeData.clusterCount ? ` across ${playtimeData.clusterCount} groups` : ""} in the selected period{playtimeData.createdAt ? `, updated ${formatExactDateTime(playtimeData.createdAt)} (${getRelativeTime(playtimeData.createdAt)})` : ""}.
                     </div>
                   ) : null}
                 </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {playtimeLegend.map((item) => (
+                  <div key={item.name} className="rounded-xl border border-border bg-secondary/20 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <span className="mt-1 inline-flex h-3 w-3 rounded-full" style={{ backgroundColor: item.color }} />
+                        <div>
+                          <p className="font-medium text-slate-900">{item.name}</p>
+                          <p className="text-xs text-muted-foreground">{formatPercent(item.percentage)} of historical booked sessions</p>
+                        </div>
+                      </div>
+                      <p className="text-sm font-semibold text-slate-900">{item.value.toLocaleString("en-US")}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
             </CardContent>
           </Card>

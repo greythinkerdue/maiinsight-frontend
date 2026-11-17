@@ -130,7 +130,11 @@
   }
 
   html {
-    font-size: 16px;
+    /* Tailwind's spacing and type scale are rem-based, so this one value
+       sets the overall density of the whole app. 16px (the browser
+       default) renders noticeably larger than comparable dashboards;
+       80% matches the zoom level users were already applying by hand. */
+    font-size: 80%;
   }
 
   body {

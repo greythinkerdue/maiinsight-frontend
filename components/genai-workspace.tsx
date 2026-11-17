@@ -231,9 +231,13 @@ interface StrategyContext {
 }
 
 interface NormalizedStrategyPayload {
+  id?: number
+  strategyId?: number
   provider: string
   model: string
   generatedAt: string
+  status?: string
+  approvedAt?: string | null
   rawText?: string | null
   technicalMessage?: string | null
   strategy: StrategyPayload
@@ -535,6 +539,18 @@ export function GenAIWorkspace({ userRole: userRoleFromProps }: GenAIWorkspacePr
     generatedAt: string
   } | null>(null)
   const [error, setError] = useState<{ message: string; suggestion?: string | null; technical?: string | null } | null>(null)
+  const [strategyStatus, setStrategyStatus] = useState<string>("draft")
+  const [isUpdatingApproval, setIsUpdatingApproval] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false)
+  const [historyItems, setHistoryItems] = useState<Array<{
+    id: number
+    generatedAt: string
+    status: string
+    campaignObjective: string | null
+    suggestedOffer: string | null
+    targetSegmentLabel: string | null
+  }>>([])
 
   useEffect(() => {
     setStoredUserRole(normalizeRole(userRoleFromProps) || getStoredRole())
@@ -597,6 +613,24 @@ export function GenAIWorkspace({ userRole: userRoleFromProps }: GenAIWorkspacePr
   const selectedSegmentLabel = normalizeSegmentLabel(selectedSegment) || "Lapsed Players"
   const outreachSegmentLabel = normalizeSegmentLabel(outreachContext?.rfmSegmentName) || selectedSegmentLabel
 
+  // Any change to audience/venue/objective/period/tone/offer invalidates the
+  // displayed strategy. Keeping a strategy generated for different filters
+  // visible is the most dangerous state this page can show.
+  useEffect(() => {
+    setStrategy(null)
+    setStrategyContext(null)
+    setContextError(null)
+    setRefineMessage(null)
+    setStrategyStatus("draft")
+  }, [
+    selectedSegment,
+    selectedVenueType,
+    selectedObjective,
+    analysisPeriodKey,
+    selectedTone,
+    resolvedOfferFramework,
+  ])
+
 
   const loadWorkspaceStatus = async () => {
     try {
@@ -642,6 +676,7 @@ export function GenAIWorkspace({ userRole: userRoleFromProps }: GenAIWorkspacePr
           generatedAt: String(latestResult.data.generatedAt),
           strategy: normalizeLegacyStrategy(latestResult.data.strategy),
         })
+        setStrategyStatus(latestResult.data.status || "draft")
       }
 
       const aiAlerts = Array.isArray(alertsResult?.data)
@@ -831,7 +866,12 @@ export function GenAIWorkspace({ userRole: userRoleFromProps }: GenAIWorkspacePr
         return false
       }
 
-      setStrategy({ ...normalizedResult, strategy: normalizeLegacyStrategy(normalizedResult.strategy) })
+      setStrategy({
+        ...normalizedResult,
+        id: normalizedResult.id ?? normalizedResult.strategyId,
+        strategy: normalizeLegacyStrategy(normalizedResult.strategy),
+      })
+      setStrategyStatus(normalizedResult.status || "draft")
       await loadWorkspaceStatus()
       return true
     } catch (generationError) {
@@ -844,6 +884,63 @@ export function GenAIWorkspace({ userRole: userRoleFromProps }: GenAIWorkspacePr
       return false
     } finally {
       setIsGenerating(false)
+    }
+  }
+
+  const handleStrategyApproval = async (status: "approved" | "rejected") => {
+    if (!strategy?.id) {
+      setError({ message: "This strategy cannot be approved because its ID is missing." })
+      return
+    }
+
+    setIsUpdatingApproval(true)
+    try {
+      const response = await fetch(getApiUrl(`/ai-strategy/${strategy.id}/approval`), {
+        method: "PATCH",
+        headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      })
+      const result = await response.json().catch(() => null)
+      if (!response.ok || !result?.success) {
+        throw new Error(result?.message || "Strategy approval could not be updated.")
+      }
+      setStrategyStatus(status)
+      await loadWorkspaceStatus()
+    } catch (approvalError) {
+      setError({
+        message:
+          approvalError instanceof Error
+            ? approvalError.message
+            : "Strategy approval could not be updated.",
+      })
+    } finally {
+      setIsUpdatingApproval(false)
+    }
+  }
+
+  const loadStrategyHistory = async () => {
+    setHistoryOpen(true)
+    setIsLoadingHistory(true)
+    try {
+      const response = await fetch(getApiUrl("/ai-strategy/history?limit=20"), {
+        method: "GET",
+        headers: getAuthHeaders(),
+        cache: "no-store",
+      })
+      const result = await response.json().catch(() => null)
+      if (!response.ok || !result?.success) {
+        throw new Error(result?.message || "Strategy history could not be loaded.")
+      }
+      setHistoryItems(result.data?.strategies || [])
+    } catch (historyError) {
+      setError({
+        message:
+          historyError instanceof Error
+            ? historyError.message
+            : "Strategy history could not be loaded.",
+      })
+    } finally {
+      setIsLoadingHistory(false)
     }
   }
 
@@ -1055,7 +1152,7 @@ export function GenAIWorkspace({ userRole: userRoleFromProps }: GenAIWorkspacePr
           <Card className="border-border bg-card shadow-sm">
   <CardHeader>
     <CardTitleTooltip title="Strategy Configuration" tooltip="Choose campaign parameters to generate a structured business recommendation." />
-    <p className="max-w-2xl text-sm text-muted-foreground">Tentukan tujuan bisnis Anda. MaiinSight AI akan menganalisis data dan memilih strategi serta penawaran yang paling sesuai.</p>
+    <p className="max-w-2xl text-sm text-muted-foreground">Set your business objective. MaiinSight AI will analyze the data and choose the most suitable strategy and offer.</p>
   </CardHeader>
 
   <CardContent className="space-y-5">
@@ -1103,7 +1200,7 @@ export function GenAIWorkspace({ userRole: userRoleFromProps }: GenAIWorkspacePr
 
         <Select
           value={selectedVenueType}
-          disabled={!canGenerateAi}
+          disabled={!canGenerateAi || workspaceMode === "low_occupancy_outreach"}
           onValueChange={(value) =>
             setSelectedVenueType(value as (typeof venueTypes)[number])
           }
@@ -1129,7 +1226,11 @@ export function GenAIWorkspace({ userRole: userRoleFromProps }: GenAIWorkspacePr
       <label className="space-y-2 text-sm font-medium">
         <span>Customer Segment</span>
 
-        <Select value={selectedSegmentLabel} onValueChange={setSelectedSegment} disabled={!canGenerateAi}>
+        <Select
+          value={workspaceMode === "low_occupancy_outreach" ? outreachSegmentLabel : selectedSegmentLabel}
+          onValueChange={setSelectedSegment}
+          disabled={!canGenerateAi || workspaceMode === "low_occupancy_outreach"}
+        >
           <SelectTrigger className={selectTriggerClassName}>
             <SelectValue placeholder="Select customer segment" />
           </SelectTrigger>
@@ -1553,12 +1654,49 @@ export function GenAIWorkspace({ userRole: userRoleFromProps }: GenAIWorkspacePr
                   <div>
                     <CardTitleTooltip title="Generated Strategy" tooltip={`AI-generated campaign strategy with objective, offer, channel, and follow-up actions. Generated ${formatExactDateTime(strategy.generatedAt)} (${getRelativeTime(strategy.generatedAt)})`} />
                   </div>
-                  <Badge
-                    variant="outline"
-                    className="w-fit border-primary/20 text-primary"
-                  >
-                    {"Generated with Gemini"}
-                  </Badge>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <Badge
+                      variant="outline"
+                      className={
+                        strategyStatus === "approved"
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                          : strategyStatus === "rejected"
+                            ? "border-red-200 bg-red-50 text-red-700"
+                            : "border-amber-200 bg-amber-50 text-amber-700"
+                      }
+                    >
+                      {strategyStatus}
+                    </Badge>
+                    <Badge variant="outline" className="border-primary/20 text-primary">
+                      Generated with Gemini
+                    </Badge>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 gap-1.5"
+                      onClick={() => void loadStrategyHistory()}
+                    >
+                      History
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="h-8 gap-1.5"
+                      onClick={() => void handleStrategyApproval("approved")}
+                      disabled={isUpdatingApproval || strategyStatus === "approved"}
+                    >
+                      {isUpdatingApproval ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                      Approve
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 gap-1.5 text-red-600"
+                      onClick={() => void handleStrategyApproval("rejected")}
+                      disabled={isUpdatingApproval || strategyStatus === "rejected"}
+                    >
+                      Reject
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-5">
@@ -1724,6 +1862,55 @@ export function GenAIWorkspace({ userRole: userRoleFromProps }: GenAIWorkspacePr
           )}
         </>
       )}
+
+      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+        <DialogContent className="max-h-[80vh] max-w-3xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>AI Strategy History</DialogTitle>
+            <DialogDescription>
+              The 20 most recent strategies with their approval status. Histories are read-only.
+            </DialogDescription>
+          </DialogHeader>
+          {isLoadingHistory ? (
+            <div className="flex min-h-24 items-center justify-center text-sm text-muted-foreground">
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Loading history...
+            </div>
+          ) : historyItems.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-border px-4 py-5 text-sm text-muted-foreground">
+              No strategy history yet.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {historyItems.map((item) => (
+                <div key={item.id} className="rounded-xl border border-border p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-medium">{item.campaignObjective || "Untitled strategy"}</p>
+                    <Badge
+                      variant="secondary"
+                      className={
+                        item.status === "approved"
+                          ? "bg-emerald-50 text-emerald-700"
+                          : item.status === "rejected"
+                            ? "bg-red-50 text-red-700"
+                            : undefined
+                      }
+                    >
+                      {item.status}
+                    </Badge>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {item.targetSegmentLabel || "Segment not recorded"} · {formatExactDateTime(item.generatedAt)}
+                  </p>
+                  {item.suggestedOffer ? (
+                    <p className="mt-1 text-sm text-muted-foreground">{item.suggestedOffer}</p>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
