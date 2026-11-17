@@ -48,6 +48,42 @@ const getMetaTokenTextTone = (status?: string) =>
       ? "text-yellow-600 dark:text-yellow-400"
       : "text-muted-foreground"
 
+/**
+ * The top "Meta" summary card used to show "Connected"/"Active" purely from
+ * whether credentials were present in config (metaConfigured) — which stays
+ * true even when Meta itself is actively rejecting every request. This
+ * folds in the live checkMetaTokenHealth() result (same one Integration
+ * Health below uses) so the two sections can't disagree.
+ */
+const describeMetaCardStatus = ({
+  metaEnabled,
+  metaConfigured,
+  liveStatus,
+}: {
+  metaEnabled: boolean
+  metaConfigured: boolean
+  liveStatus?: string
+}): { value: string; badgeLabel: string; badgeVariant: "default" | "secondary" | "destructive" } => {
+  if (!metaEnabled) return { value: "Disabled", badgeLabel: "Inactive", badgeVariant: "destructive" }
+  if (!metaConfigured) return { value: "No Credentials", badgeLabel: "Inactive", badgeVariant: "destructive" }
+
+  switch (liveStatus) {
+    case "valid":
+      return { value: "Connected", badgeLabel: "Active", badgeVariant: "default" }
+    case "warning":
+    case "critical":
+      return { value: "Token Expiring Soon", badgeLabel: "Active", badgeVariant: "secondary" }
+    case "expired":
+      return { value: "Token Expired", badgeLabel: "Error", badgeVariant: "destructive" }
+    case "error":
+      return { value: "Connection Error", badgeLabel: "Error", badgeVariant: "destructive" }
+    default:
+      // Not checked yet this session (checkTokensNow runs on mount, so this
+      // is only momentary) — credentials are present but not yet confirmed.
+      return { value: "Connected", badgeLabel: "Active", badgeVariant: "default" }
+  }
+}
+
 interface SummaryResponse {
   success: boolean
   message?: string
@@ -226,6 +262,12 @@ export function SystemSettings() {
     } finally { setMetaCheckLoading(false) }
   }
   const isDatabaseConnected = summary?.database?.status === "connected"
+  const metaLiveStatus = tokenCheckResult?.meta?.status
+  const metaCardStatus = describeMetaCardStatus({
+    metaEnabled: integrationForm.metaEnabled,
+    metaConfigured: Boolean(summary?.integrations.metaConfigured),
+    liveStatus: metaLiveStatus,
+  })
 
   const totalPages = Math.max(1, Math.ceil(users.length / USERS_PER_PAGE))
   const paginatedUsers = users.slice((userPage - 1) * USERS_PER_PAGE, userPage * USERS_PER_PAGE)
@@ -579,14 +621,18 @@ export function SystemSettings() {
 
             <KpiCard
               label="Meta"
-              value={integrationForm.metaEnabled ? (summary?.integrations.metaConfigured ? "Connected" : "No Credentials") : "Disabled"}
-              changeLabel={summary?.latestMetaSync
-                ? `Last sync: ${new Date(summary.latestMetaSync.startedAt).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}`
-                : "No sync yet"}
-              tooltip="Meta Graph API connection status and last sync time."
+              value={metaCardStatus.value}
+              changeLabel={
+                metaLiveStatus === "error" || metaLiveStatus === "expired"
+                  ? tokenCheckResult?.meta?.error || "Meta rejected the last health check."
+                  : summary?.latestMetaSync
+                    ? `Last sync: ${new Date(summary.latestMetaSync.startedAt).toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}`
+                    : "No sync yet"
+              }
+              tooltip="Meta Graph API connection status and last sync time — reflects the same live health check as Integration Health below, not just whether credentials are saved."
             >
-              <Badge variant={summary?.integrations.metaConfigured && integrationForm.metaEnabled ? "default" : "destructive"} className="rounded-full px-3">
-                {summary?.integrations.metaConfigured && integrationForm.metaEnabled ? "Active" : "Inactive"}
+              <Badge variant={metaCardStatus.badgeVariant} className="rounded-full px-3">
+                {metaCardStatus.badgeLabel}
               </Badge>
             </KpiCard>
 
