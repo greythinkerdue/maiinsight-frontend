@@ -798,7 +798,7 @@ export function CampaignKpis() {
       </Dialog>
 
       <Dialog open={workspaceOpen} onOpenChange={setWorkspaceOpen}>
-        <DialogContent className="max-h-[88vh] max-w-6xl overflow-y-auto">
+        <DialogContent className="max-h-[88vh] sm:max-w-6xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Campaign Workspace</DialogTitle>
             <DialogDescription>

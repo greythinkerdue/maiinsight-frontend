@@ -1930,7 +1930,7 @@ const dataMonthRangeLabel = buildMonthRangeLabel(dataMonthRange?.min ?? null, da
         open={campaignWorkspaceOpen && Boolean(createdCampaign)}
         onOpenChange={setCampaignWorkspaceOpen}
       >
-        <DialogContent className="max-h-[88vh] max-w-6xl overflow-y-auto">
+        <DialogContent className="max-h-[88vh] sm:max-w-6xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Campaign Workspace</DialogTitle>
             <DialogDescription>
