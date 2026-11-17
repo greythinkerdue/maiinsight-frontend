@@ -142,6 +142,13 @@ export interface OutreachPerformance {
   conversionRate: number
   controlConversionRate: number
   liftPct: number | null
+  liftSignificance: {
+    pValue: number
+    zScore: number
+    significant: boolean
+    confidenceIntervalPct: [number, number]
+    method: string
+  } | null
   estimatedIncrementalBookings: number
   estimatedIncrementalRevenue: number
   attributedBookingCount: number

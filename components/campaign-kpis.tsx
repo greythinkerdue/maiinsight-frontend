@@ -76,6 +76,15 @@ const formatCurrency = (value: number | null) =>
 const formatPercent = (value: number | null) =>
   value === null || value === undefined ? "Not tracked" : `${Number(value).toFixed(1)}%`
 
+const formatSignificance = (
+  liftSignificance: { pValue: number; significant: boolean } | null
+) => {
+  if (!liftSignificance) return null
+  return liftSignificance.significant
+    ? `significant (p=${liftSignificance.pValue.toFixed(3)})`
+    : `not significant (p=${liftSignificance.pValue.toFixed(3)})`
+}
+
 const formatDate = (value: string | null) => {
   if (!value) return "-"
   const date = new Date(value)
@@ -437,7 +446,11 @@ export function CampaignKpis() {
                 selectedIsControlAware
                   ? `${formatPercent(performance.conversionRate)} treated vs ${formatPercent(
                       performance.controlConversionRate
-                    )} holdout`
+                    )} holdout${
+                      formatSignificance(performance.liftSignificance)
+                        ? ` · ${formatSignificance(performance.liftSignificance)}`
+                        : ""
+                    }`
                   : "Holdout group too small to isolate lift; treat as directional."
               }
               tone={selectedIsControlAware ? "default" : "warning"}
