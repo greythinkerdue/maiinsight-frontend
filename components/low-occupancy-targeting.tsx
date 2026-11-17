@@ -10,6 +10,7 @@ import {
   Info,
   Loader2,
   MessageCircle,
+  MoreHorizontal,
   ShieldCheck,
   Sparkles,
   Target,
@@ -19,7 +20,22 @@ import { HeatmapGrid } from "@/components/segment-visualization"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import {
   Card,
   CardContent,
@@ -1602,71 +1618,73 @@ const dataMonthRangeLabel = buildMonthRangeLabel(dataMonthRange?.min ?? null, da
               No matching customers found for this session. Try adjusting the filters.
             </div>
           ) : (
-            <div className="max-w-full overflow-x-auto rounded-2xl border border-border">
-              <table className="min-w-[1900px] divide-y divide-border text-sm [&_td:not(:last-child)]:border-r [&_td:not(:last-child)]:border-border/70 [&_th:not(:last-child)]:border-r [&_th:not(:last-child)]:border-border/70">
-                <thead>
-                  <tr className="text-muted-foreground">
-                    <th className="min-w-[150px] px-3 py-3 text-center align-middle font-semibold">Customer Name</th>
-                    <th className="min-w-[135px] px-3 py-3 text-center align-middle font-semibold">Customer Type</th>
-                    <th className="min-w-[125px] px-3 py-3 text-center align-middle font-semibold">Phone</th>
-                    <th className="min-w-[190px] px-3 py-3 text-center align-middle font-semibold">Email</th>
-                    <th className="min-w-[130px] px-3 py-3 text-center align-middle font-semibold">Preferred Session</th>
-                    <th className="min-w-[120px] px-3 py-3 text-center align-middle font-semibold">Campaign Match</th>
-                    <th className="min-w-[95px] px-3 py-3 text-center align-middle font-semibold">Court Count</th>
-                    <th className="min-w-[120px] px-3 py-3 text-center align-middle font-semibold">Last Booking</th>
-                    <th className="min-w-[125px] px-3 py-3 text-center align-middle font-semibold">Avg Spend</th>
-                    <th className="min-w-[145px] px-3 py-3 text-center align-middle font-semibold">RFM Segment</th>
-                    <th className="min-w-[135px] px-3 py-3 text-center align-middle font-semibold">Priority</th>
-                    <th className="min-w-[220px] px-3 py-3 text-center align-middle font-semibold">Suggested Action</th>
-                    <th className="min-w-[220px] px-3 py-3 text-center align-middle font-semibold">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {customers.map((customer) => (
-                    <tr key={customer.customerKey} className="align-top">
-                      <td className="px-3 py-3 font-medium text-slate-900">
-                        {customer.customerName || customer.customerKey}
-                      </td>
-                      <td className="px-3 py-3">{customer.customerTypeLabel}</td>
-                      <td className="whitespace-nowrap px-3 py-3">{customer.phone || "-"}</td>
-                      <td className="px-3 py-3">{customer.email || "-"}</td>
-                      <td className="whitespace-nowrap px-3 py-3 text-center">{customer.preferredSession || "-"}</td>
-                      <td className="px-3 py-3 text-center">{customer.selectedSessionBookingCount}</td>
-                      <td className="px-3 py-3 text-center">{customer.selectedCourtBookingCount}</td>
-                      <td className="min-w-[120px] whitespace-nowrap px-3 py-3 text-center">{customer.lastBookingDate || "-"}</td>
-                      <td className="min-w-[125px] whitespace-nowrap px-3 py-3 text-right">Rp {customer.avgSpend.toLocaleString()}</td>
-                      <td className="px-3 py-3 text-center">{customer.rfmSegmentName || "Not segmented"}</td>
-                      <td className="px-3 py-3 text-center">
-                        <div className="space-y-1">
-                          <Badge
-                            variant="secondary"
-                            className={customer.targetPriorityLabel === "High Priority"
-                              ? "border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100"
-                              : "border border-border bg-muted text-muted-foreground hover:bg-muted"}
-                          >
-                            {customer.targetPriorityLabel}
-                          </Badge>
-                          <p className="text-xs text-muted-foreground">
-                            Score: {customer.targetPriorityScore}
-                          </p>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3">{customer.suggestedAction}</td>
-                      <td className="px-3 py-3 text-center">
-                        <div className="flex min-w-[220px] flex-col gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="justify-start gap-2"
-                            onClick={() =>
-                              void copyText(customer.phone, "Phone copied to clipboard.")
-                            }
-                          >
-                            <Copy className="h-4 w-4" />
-                            Copy Phone
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Preferred Session</TableHead>
+                  <TableHead className="text-center">Campaign Match</TableHead>
+                  <TableHead className="text-center">Court Count</TableHead>
+                  <TableHead>Last Booking</TableHead>
+                  <TableHead className="text-right">Avg Spend</TableHead>
+                  <TableHead>RFM Segment</TableHead>
+                  <TableHead>Priority</TableHead>
+                  <TableHead>Suggested Action</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {customers.map((customer) => (
+                  <TableRow key={customer.customerKey}>
+                    <TableCell>
+                      <p className="font-medium text-foreground">{customer.customerName || customer.customerKey}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {customer.customerTypeLabel}
+                        {customer.phone ? ` · ${customer.phone}` : ""}
+                      </p>
+                      {customer.email ? (
+                        <p className="text-xs text-muted-foreground">{customer.email}</p>
+                      ) : null}
+                    </TableCell>
+                    <TableCell className="whitespace-nowrap">{customer.preferredSession || "-"}</TableCell>
+                    <TableCell className="text-center">{customer.selectedSessionBookingCount}</TableCell>
+                    <TableCell className="text-center">{customer.selectedCourtBookingCount}</TableCell>
+                    <TableCell className="whitespace-nowrap">{customer.lastBookingDate || "-"}</TableCell>
+                    <TableCell className="whitespace-nowrap text-right">Rp {customer.avgSpend.toLocaleString()}</TableCell>
+                    <TableCell>{customer.rfmSegmentName || "Not segmented"}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="secondary"
+                        className={customer.targetPriorityLabel === "High Priority"
+                          ? "border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100"
+                          : "border border-border bg-muted text-muted-foreground hover:bg-muted"}
+                      >
+                        {customer.targetPriorityLabel}
+                      </Badge>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Score: {customer.targetPriorityScore}
+                      </p>
+                    </TableCell>
+                    <TableCell className="max-w-[240px] text-sm text-muted-foreground">
+                      {customer.suggestedAction}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="h-4 w-4" />
+                            <span className="sr-only">Open actions</span>
                           </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            onClick={() => void copyText(customer.phone, "Phone copied to clipboard.")}
+                          >
+                            <Copy className="mr-2 h-4 w-4" />
+                            Copy Phone
+                          </DropdownMenuItem>
                           {buildWhatsappLink(customer.phone, customer.whatsappMessage) ? (
-                            <Button variant="outline" size="sm" className="justify-start gap-2" asChild>
+                            <DropdownMenuItem asChild>
                               <a
                                 href={buildWhatsappLink(customer.phone, customer.whatsappMessage) || "#"}
                                 target="_blank"
@@ -1678,44 +1696,34 @@ const dataMonthRangeLabel = buildMonthRangeLabel(dataMonthRange?.min ?? null, da
                                   )
                                 }
                               >
-                                <MessageCircle className="h-4 w-4" />
+                                <MessageCircle className="mr-2 h-4 w-4" />
                                 Open WhatsApp
                               </a>
-                            </Button>
+                            </DropdownMenuItem>
                           ) : null}
-                          <Button
-                            size="sm"
-                            className="justify-start gap-2"
-                            onClick={() => setMessageDraftCustomer(customer)}
-                          >
-                            <Sparkles className="h-4 w-4" />
+                          <DropdownMenuItem onClick={() => setMessageDraftCustomer(customer)}>
+                            <Sparkles className="mr-2 h-4 w-4" />
                             Generate Message
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="justify-start gap-2"
-                            onClick={() => openGenAi(customer)}
-                          >
-                            <Sparkles className="h-4 w-4" />
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openGenAi(customer)}>
+                            <Sparkles className="mr-2 h-4 w-4" />
                             Open AI Workspace
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="justify-start gap-2 text-red-600 hover:text-red-700"
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-red-600 focus:text-red-700"
                             onClick={() => void handleOptOutCustomer(customer)}
                           >
-                            <UserX className="h-4 w-4" />
+                            <UserX className="mr-2 h-4 w-4" />
                             Opt Out
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
           </div>
           {customerPagination && Math.ceil((customerPagination.totalCustomers || 0) / customerPageSize) > 1 ? (

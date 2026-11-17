@@ -51,20 +51,20 @@ test("campaign history is labeled and typed with latest play-date semantics", ()
 })
 
 test("recommended customer table preserves readable columns and priority emphasis", () => {
-  const tableStart = source.indexOf('<table className="min-w-[1900px]')
-  const tableEnd = source.indexOf("</table>", tableStart)
+  const tableStart = source.indexOf("<Table>", source.indexOf('title="Recommended Customers"'))
+  const tableEnd = source.indexOf("</Table>", tableStart)
   const table = source.slice(tableStart, tableEnd)
 
-  assert.match(source, /max-w-full overflow-x-auto/)
-  assert.match(table, /text-center align-middle font-semibold/)
-  assert.match(table, /min-w-\[120px\] whitespace-nowrap[^\n]*lastBookingDate/)
-  assert.match(table, /min-w-\[125px\] whitespace-nowrap[^\n]*avgSpend/)
+  assert.match(table, /<TableHead>Customer<\/TableHead>/)
+  assert.match(table, /whitespace-nowrap[^\n]*lastBookingDate/)
+  assert.match(table, /whitespace-nowrap text-right[^\n]*avgSpend/)
   assert.match(table, /bg-orange-50 text-orange-700/)
   assert.match(table, /bg-muted text-muted-foreground/)
   assert.match(table, /Score: \{customer\.targetPriorityScore\}/)
   assert.match(table, /Copy Phone/)
   assert.match(table, /Generate Message/)
   assert.match(table, /Open AI Workspace/)
+  assert.match(table, /Opt Out/)
 })
 
 test("historical summary precedes the responsive monthly breakdown", () => {
@@ -94,11 +94,24 @@ test("Average Filled Slots keeps its value and shows a non-percent monthly unit"
   assert.match(source, /min-h-20/)
 })
 
-test("recommended customer header and body share subtle vertical dividers", () => {
-  assert.match(source, /rounded-2xl border border-border/)
-  assert.match(source, /\[&_th:not\(:last-child\)\]:border-r/)
-  assert.match(source, /\[&_td:not\(:last-child\)\]:border-r/)
-  assert.match(source, /border-border\/70/)
+test("recommended customer table consolidates identity columns and collapses row actions into a menu", () => {
+  const tableStart = source.indexOf("<Table>", source.indexOf('title="Recommended Customers"'))
+  const tableEnd = source.indexOf("</Table>", tableStart)
+  const table = source.slice(tableStart, tableEnd)
+
+  // Name/type/phone/email used to be four separate columns, each forcing
+  // every row to the height of the tallest cell; they're one column now.
+  assert.doesNotMatch(table, /<TableHead>Customer Name<\/TableHead>/)
+  assert.doesNotMatch(table, /<TableHead>Phone<\/TableHead>/)
+  assert.doesNotMatch(table, /<TableHead>Email<\/TableHead>/)
+  assert.match(table, /customer\.customerTypeLabel/)
+  assert.match(table, /customer\.phone \? ` · \$\{customer\.phone\}` : ""/)
+  assert.match(table, /customer\.email \? /)
+
+  // Four stacked full-width buttons used to dictate every row's height;
+  // actions now live behind a single dropdown trigger.
+  assert.match(table, /<DropdownMenu>/)
+  assert.match(table, /<MoreHorizontal/)
 })
 
 test("page Booking Type filter reserves space and lists booking type options", () => {
