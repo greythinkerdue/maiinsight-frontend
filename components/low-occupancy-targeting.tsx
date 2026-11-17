@@ -1507,6 +1507,7 @@ const dataMonthRangeLabel = buildMonthRangeLabel(dataMonthRange?.min ?? null, da
             <CardTitle className="flex items-center gap-2 text-lg">
               <CalendarDays className="h-5 w-5 text-primary" />
               Slot Availability &amp; Audience Coverage
+              <InfoTooltip content="How many empty court-hours exist for this day/session, how many customers are being targeted, and whether that audience is large enough to realistically fill the gap." />
             </CardTitle>
             <CardDescription>
               {formatIsoDateDisplay(campaignDate)} · {sessionName} · {slotAvailability.courtTypeLabel}

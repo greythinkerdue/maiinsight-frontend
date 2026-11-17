@@ -260,6 +260,7 @@ export function ChurnRiskPanel({ onNavigate }: ChurnRiskPanelProps) {
               value={run.aucTest === null ? "n/a" : run.aucTest.toFixed(3)}
               icon={Target}
               changeLabel="Area under the ROC curve, held-out time split"
+              tooltip="Area under the ROC curve on the held-out test split. 0.5 means the model is no better than random guessing; 1.0 means perfect separation between churners and non-churners."
             >
               {aucQuality && (
                 <Badge variant={aucQuality.tone} className="mt-2">
@@ -272,6 +273,7 @@ export function ChurnRiskPanel({ onNavigate }: ChurnRiskPanelProps) {
               value={`${formatPercent(run.precisionTest)} / ${formatPercent(run.recallTest)}`}
               icon={Percent}
               changeLabel={`F1 ${run.f1Test === null ? "n/a" : run.f1Test.toFixed(3)} at threshold ${run.threshold}`}
+              tooltip="Precision: of customers flagged at-risk, how many actually churned. Recall: of customers who actually churned, how many the model caught. Both measured on the held-out test split."
             >
               {baselineAccuracy !== null && (
                 <p className="mt-2 text-xs text-muted-foreground">
@@ -285,12 +287,14 @@ export function ChurnRiskPanel({ onNavigate }: ChurnRiskPanelProps) {
               value={`${run.trainSize} / ${run.testSize}`}
               icon={ListChecks}
               changeLabel="Time-based split: train strictly before test"
+              tooltip="Number of labeled historical snapshots used to train vs. evaluate the model. The split is time-based: every training row is chronologically before every test row, to avoid leaking future information."
             />
             <KpiCard
               label="Churn Rate (Train / Test)"
               value={`${formatPercent(run.trainPositiveRate)} / ${formatPercent(run.testPositiveRate)}`}
               icon={Users}
               changeLabel={`Trained ${new Date(run.trainedAt).toLocaleString()}`}
+              tooltip="Share of snapshots labeled as churned in each split. A high base rate like this one means raw accuracy can be misleading — compare it against the naive-baseline note under Precision / Recall."
             />
           </div>
 

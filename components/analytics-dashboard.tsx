@@ -1511,6 +1511,7 @@ const revenueXAxisTicks = useMemo(() => {
                   <CardTitle className="flex items-center gap-2 text-xl">
                     <Sparkles className="h-5 w-5 text-primary" />
                     <span>Business Insight</span>
+                    <InfoTooltip content="A short written summary of business performance for the selected period, generated from revenue, occupancy, and customer-segment data." />
                   </CardTitle>
                   <CardDescription>
                     {businessInsight?.source === "ai"

@@ -46,6 +46,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   Select,
   SelectContent,
@@ -114,16 +115,37 @@ const formatDate = (value: string | null) => {
   }).format(date)
 }
 
+function InfoTooltip({ text }: { text: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition hover:bg-accent hover:text-foreground"
+          aria-label="More information"
+        >
+          <Info className="h-3.5 w-3.5" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={8} className="max-w-xs text-left leading-relaxed">
+        {text}
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
 function KpiCard({
   label,
   value,
   detail,
   tone = "default",
+  tooltip,
 }: {
   label: string
   value: string
   detail: string
   tone?: "default" | "warning" | "muted"
+  tooltip?: string
 }) {
   return (
     <div
@@ -135,7 +157,10 @@ function KpiCard({
             : "rounded-2xl border border-border bg-card p-4"
       }
     >
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <span>{label}</span>
+        {tooltip && <span className="normal-case"><InfoTooltip text={tooltip} /></span>}
+      </p>
       <p className="mt-1.5 text-2xl font-bold text-foreground">{value}</p>
       <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
     </div>
@@ -469,6 +494,7 @@ export function CampaignKpis() {
                         : formatPercent(performance.occupancyLiftPct)
                     }`
               }
+              tooltip="Paid court-hours divided by configured capacity on the campaign date and session."
             />
             <KpiCard
               label="Incremental Bookings"
@@ -485,6 +511,7 @@ export function CampaignKpis() {
                   : "Holdout group too small to isolate lift; treat as directional."
               }
               tone={selectedIsControlAware ? "default" : "warning"}
+              tooltip="Treatment bookings above the conversion rate observed in the holdout group."
             />
             <KpiCard
               label="Attributed Revenue"
@@ -492,6 +519,7 @@ export function CampaignKpis() {
               detail={`${performance.attributedBookingCount} promo-coded bookings · ${formatPercent(
                 performance.redemptionRate
               )} redemption`}
+              tooltip="Revenue from bookings that used the campaign promo code inside the measurement window."
             />
             <KpiCard
               label="Cost per Booking"
@@ -506,6 +534,7 @@ export function CampaignKpis() {
                   : "Set a campaign budget when creating a campaign to enable this KPI."
               }
               tone={performance.costBudget > 0 ? "default" : "muted"}
+              tooltip="Campaign budget divided by promo-attributed bookings. Shows null when no budget is set."
             />
           </div>
 
@@ -515,12 +544,14 @@ export function CampaignKpis() {
               value="Not tracked"
               detail={performance.responseRateNote}
               tone="muted"
+              tooltip="Not tracked yet. WhatsApp replies need manual logging or a WhatsApp Business API integration."
             />
             <KpiCard
               label="Opt-out Rate"
               value={formatPercent(performance.optOutRate)}
               detail={`${performance.optedOutCount} of ${performance.audienceSize} recipients`}
               tone={performance.optOutRate >= 5 ? "warning" : "default"}
+              tooltip="Share of the audience that asked to stop receiving promotional messages."
             />
             <KpiCard
               label="Audience vs Empty Slots"
@@ -534,12 +565,14 @@ export function CampaignKpis() {
                   ? "warning"
                   : "default"
               }
+              tooltip="Audience size compared with empty court-hours to show whether the list can fill the gap."
             />
             <KpiCard
               label="Cannibalization"
               value={formatPercent(performance.cannibalizationRate)}
               detail="Converted customers who booked without the promo code. High values mean the campaign may be paying for demand that already existed."
               tone={performance.cannibalizationRate >= 50 ? "warning" : "default"}
+              tooltip="Converted customers who booked without the promo code, indicating demand that may have existed anyway."
             />
           </div>
 
@@ -548,7 +581,8 @@ export function CampaignKpis() {
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <Users className="h-5 w-5 text-primary" />
-                  Campaign Summary
+                  <span>Campaign Summary</span>
+                  <InfoTooltip text="Snapshot of the selected campaign — audience size, treated vs. holdout split, outreach progress, and promo prefix." />
                 </CardTitle>
                 <div className="flex items-center gap-2">
                   <Badge variant={STATUS_BADGE_VARIANT[selected.campaign.status] || "secondary"}>
@@ -643,7 +677,8 @@ export function CampaignKpis() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <Search className="h-5 w-5 text-primary" />
-                  Unmatched Promo Check ({performance.possibleUnmatchedConversions.length})
+                  <span>Unmatched Promo Check ({performance.possibleUnmatchedConversions.length})</span>
+                  <InfoTooltip text="Treatment customers who booked in-window without a matched promo code. Could be organic demand or a promo code the register missed — worth a manual check." />
                 </CardTitle>
                 <CardDescription>{performance.possibleUnmatchedConversionsNote}</CardDescription>
               </CardHeader>
@@ -676,7 +711,8 @@ export function CampaignKpis() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <TrendingUp className="h-5 w-5 text-primary" />
-                KPI Definitions
+                <span>KPI Definitions</span>
+                <InfoTooltip text="What each number on this page means, and which KPIs are not measurable yet from current data." />
               </CardTitle>
               <CardDescription>What each number means and what is still missing.</CardDescription>
             </CardHeader>
@@ -817,7 +853,8 @@ export function CampaignKpis() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <Ban className="h-5 w-5 text-primary" />
-            Opt-out List
+            <span>Opt-out List</span>
+            <InfoTooltip text="Customers excluded from every future campaign because they asked to stop receiving promotional messages." />
           </CardTitle>
           <CardDescription>
             Customers here are excluded from every future campaign. Only remove an opt-out when the customer explicitly asks to receive messages again.
