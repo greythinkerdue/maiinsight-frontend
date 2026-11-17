@@ -9,7 +9,9 @@ const roles = await readFile(new URL("../lib/roles.ts", import.meta.url), "utf8"
 const layout = await readFile(new URL("./dashboard-layout.tsx", import.meta.url), "utf8")
 
 test("ChurnRiskPanel exposes model metrics and a Train Model action", () => {
-  assert.match(source, /AUC \(test\)/)
+  assert.match(source, /AUC \(Test\)/)
+  assert.match(source, /from "@\/components\/ui\/card"/)
+  assert.match(source, /<KpiCard/)
   assert.match(source, /Precision \/ Recall/)
   assert.match(source, /Train \/ Test Rows/)
   assert.match(source, />\s*Train Model/)

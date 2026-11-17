@@ -1,7 +1,16 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
-import { AlertTriangle, Loader2, RefreshCw, TrendingDown } from "lucide-react"
+import {
+  AlertTriangle,
+  ListChecks,
+  Loader2,
+  Percent,
+  RefreshCw,
+  Target,
+  TrendingDown,
+  Users,
+} from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -11,8 +20,8 @@ import {
   CardDescription,
   CardHeader,
   CardTitleTooltip,
+  KpiCard,
   StateCard,
-  StatCard,
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import {
@@ -165,26 +174,35 @@ export function ChurnRiskPanel() {
       ) : (
         <>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <StatCard
-              label="AUC (test)"
+            <KpiCard
+              label="AUC (Test)"
               value={run.aucTest === null ? "n/a" : run.aucTest.toFixed(3)}
-              badge={aucQuality ? <Badge variant={aucQuality.tone}>{aucQuality.label}</Badge> : undefined}
-              subText="Area under the ROC curve, held-out time split"
-            />
-            <StatCard
+              icon={Target}
+              changeLabel="Area under the ROC curve, held-out time split"
+            >
+              {aucQuality && (
+                <Badge variant={aucQuality.tone} className="mt-2">
+                  {aucQuality.label}
+                </Badge>
+              )}
+            </KpiCard>
+            <KpiCard
               label="Precision / Recall"
               value={`${formatPercent(run.precisionTest)} / ${formatPercent(run.recallTest)}`}
-              subText={`F1 ${run.f1Test === null ? "n/a" : run.f1Test.toFixed(3)} at threshold ${run.threshold}`}
+              icon={Percent}
+              changeLabel={`F1 ${run.f1Test === null ? "n/a" : run.f1Test.toFixed(3)} at threshold ${run.threshold}`}
             />
-            <StatCard
+            <KpiCard
               label="Train / Test Rows"
               value={`${run.trainSize} / ${run.testSize}`}
-              subText="Time-based split: train strictly before test"
+              icon={ListChecks}
+              changeLabel="Time-based split: train strictly before test"
             />
-            <StatCard
-              label="Churn Rate (train / test)"
+            <KpiCard
+              label="Churn Rate (Train / Test)"
               value={`${formatPercent(run.trainPositiveRate)} / ${formatPercent(run.testPositiveRate)}`}
-              subText={`Trained ${new Date(run.trainedAt).toLocaleString()}`}
+              icon={Users}
+              changeLabel={`Trained ${new Date(run.trainedAt).toLocaleString()}`}
             />
           </div>
 
