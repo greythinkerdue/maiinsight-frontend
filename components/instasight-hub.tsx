@@ -283,6 +283,14 @@ contentInsightsAvailability: {
 // backend service, routes, and data are untouched — flip this back to re-enable.
 const SHOW_PROMOTION_ATTRIBUTION = false
 
+// Hidden temporarily: the Instagram Business account got disconnected from
+// its Facebook Page after a password change on the IG side (confirmed via
+// Graph API diagnostics — token is valid, scopes are fine, the Page just has
+// no instagram_business_account linked anymore). Re-enable once the account
+// is reconnected in Meta Business Suite and the IG User ID in Settings is
+// updated to the new one; the underlying sync/error handling is untouched.
+const SHOW_META_SYNC_WARNING_BANNER = false
+
 const formatNumber = (value: number) => value.toLocaleString("en-US")
 const formatPercent = (value: number | null | undefined) =>
   typeof value === "number" && Number.isFinite(value)
@@ -811,7 +819,7 @@ return (
           </div>
         </div>
       ) : null}
-      {hasRealData && (status?.connectionState === "error" || status?.configured === false) ? (
+      {SHOW_META_SYNC_WARNING_BANNER && hasRealData && (status?.connectionState === "error" || status?.configured === false) ? (
         <BusinessErrorAlert
           title="Meta synchronization warning"
           message="Meta synchronization is currently unavailable or not configured. Showing stored InstaSight data."
