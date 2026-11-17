@@ -306,6 +306,10 @@ export const getRecommendedCustomers = async (params: {
   campaignDate?: string
   limit?: number
   offset?: number
+  search?: string
+  priorityLabel?: string
+  avgSpendMin?: number
+  avgSpendMax?: number
 }) => {
   const query = buildQuery(params)
   const response = await fetch(getApiUrl(`/targeting/recommended-customers${query}`), {

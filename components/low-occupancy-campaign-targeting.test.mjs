@@ -94,6 +94,15 @@ test("Average Filled Slots keeps its value and shows a non-percent monthly unit"
   assert.match(source, /min-h-20/)
 })
 
+test("recommended customer table offers a search box plus priority and avg-spend column filters", () => {
+  assert.match(source, /Search recommended customers/)
+  assert.match(source, /<FilterableTableHead\s+label="Avg Spend"/)
+  assert.match(source, /<FilterableTableHead label="Priority"/)
+  assert.match(source, /High Priority<\/option>/)
+  assert.match(api, /priorityLabel\?: string/)
+  assert.match(api, /avgSpendMin\?: number/)
+})
+
 test("recommended customer table consolidates identity columns and collapses row actions into a menu", () => {
   const tableStart = source.indexOf("<Table>", source.indexOf('title="Recommended Customers"'))
   const tableEnd = source.indexOf("</Table>", tableStart)

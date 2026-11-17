@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, type ReactNode } from "react"
 import {
   AlertCircle,
   CalendarDays,
@@ -8,6 +8,7 @@ import {
   Copy,
   Download,
   Info,
+  ListFilter,
   Loader2,
   MessageCircle,
   MoreHorizontal,
@@ -28,6 +29,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
   Table,
   TableBody,
@@ -451,6 +453,52 @@ function InfoTooltip({ content }: { content: string }) {
   )
 }
 
+function FilterableTableHead({
+  label,
+  align = "left",
+  active,
+  children,
+}: {
+  label: string
+  align?: "left" | "right" | "center"
+  active: boolean
+  children: ReactNode
+}) {
+  return (
+    <div
+      className={`flex items-center gap-1 ${
+        align === "right" ? "justify-end" : align === "center" ? "justify-center" : ""
+      }`}
+    >
+      <span>{label}</span>
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            aria-label={`Filter by ${label}`}
+            className={`relative rounded-md p-1 transition-colors ${
+              active
+                ? "bg-primary/10 text-primary"
+                : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+            }`}
+          >
+            <ListFilter className="h-3.5 w-3.5" aria-hidden="true" />
+            {active ? (
+              <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+            ) : null}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-64 space-y-2 p-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            {label}
+          </p>
+          {children}
+        </PopoverContent>
+      </Popover>
+    </div>
+  )
+}
+
 export function LowOccupancyTargeting({ onNavigate }: LowOccupancyTargetingProps) {
 
   const [playtimeMixData, setPlaytimeMixData] = useState<PlaytimeMixData | null>(null)
@@ -510,6 +558,30 @@ const playtimeRequestRef = useRef(0)
   // default filters on first load.
   const [hasRequestedRecommendations, setHasRequestedRecommendations] = useState(false)
 
+  // Table-level filters (search a customer by name, filter by priority
+  // tier, or by an avg-spend range) — separate from the Campaign Targeting
+  // filters above, which decide the audience itself rather than how it's
+  // displayed. Debounced so typing doesn't refetch on every keystroke.
+  const [tableSearch, setTableSearch] = useState("")
+  const [debouncedTableSearch, setDebouncedTableSearch] = useState("")
+  const [priorityFilter, setPriorityFilter] = useState("")
+  const [avgSpendMin, setAvgSpendMin] = useState("")
+  const [avgSpendMax, setAvgSpendMax] = useState("")
+  const [debouncedSpendRange, setDebouncedSpendRange] = useState({ min: "", max: "" })
+
+  useEffect(() => {
+    const timeout = setTimeout(() => setDebouncedTableSearch(tableSearch), 350)
+    return () => clearTimeout(timeout)
+  }, [tableSearch])
+
+  useEffect(() => {
+    const timeout = setTimeout(
+      () => setDebouncedSpendRange({ min: avgSpendMin, max: avgSpendMax }),
+      350
+    )
+    return () => clearTimeout(timeout)
+  }, [avgSpendMin, avgSpendMax])
+
   const loadCustomers = async (filters?: {
     nextCampaignDay?: string
     nextCampaignDate?: string
@@ -546,6 +618,10 @@ const playtimeRequestRef = useRef(0)
         segmentName: nextSegmentName === "all" ? undefined : nextSegmentName,
         limit: nextPageSize,
         offset: (nextCustomerPage - 1) * nextPageSize,
+        search: debouncedTableSearch || undefined,
+        priorityLabel: priorityFilter || undefined,
+        avgSpendMin: debouncedSpendRange.min ? Number(debouncedSpendRange.min) : undefined,
+        avgSpendMax: debouncedSpendRange.max ? Number(debouncedSpendRange.max) : undefined,
       })
 
       if (requestId !== customerRequestRef.current) return
@@ -726,6 +802,13 @@ const playtimeRequestRef = useRef(0)
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (!hasRequestedRecommendations) return
+    setCurrentCustomerPage(1)
+    void loadCustomers({ nextCustomerPage: 1 })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [debouncedTableSearch, priorityFilter, debouncedSpendRange.min, debouncedSpendRange.max])
 
   const handleApply = async () => {
     setStatusMessage(null)
@@ -1573,6 +1656,13 @@ const dataMonthRangeLabel = buildMonthRangeLabel(dataMonthRange?.min ?? null, da
         <CardContent className="p-0">
           <div className="px-6 pb-6">
           <div className="flex flex-wrap items-center gap-2 pb-4">
+            <Input
+              value={tableSearch}
+              onChange={(event) => setTableSearch(event.target.value)}
+              placeholder="Search customer..."
+              className="h-9 w-48"
+              aria-label="Search recommended customers"
+            />
             <Button
               variant="outline"
               size="sm"
@@ -1626,9 +1716,52 @@ const dataMonthRangeLabel = buildMonthRangeLabel(dataMonthRange?.min ?? null, da
                   <TableHead className="text-center">Campaign Match</TableHead>
                   <TableHead className="text-center">Court Count</TableHead>
                   <TableHead>Last Booking</TableHead>
-                  <TableHead className="text-right">Avg Spend</TableHead>
+                  <TableHead className="text-right">
+                    <FilterableTableHead
+                      label="Avg Spend"
+                      align="right"
+                      active={Boolean(avgSpendMin || avgSpendMax)}
+                    >
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min="0"
+                          step="10000"
+                          value={avgSpendMin}
+                          onChange={(event) => setAvgSpendMin(event.target.value)}
+                          placeholder="Min"
+                          aria-label="Minimum average spend"
+                          className="h-9"
+                        />
+                        <Input
+                          type="number"
+                          min="0"
+                          step="10000"
+                          value={avgSpendMax}
+                          onChange={(event) => setAvgSpendMax(event.target.value)}
+                          placeholder="Max"
+                          aria-label="Maximum average spend"
+                          className="h-9"
+                        />
+                      </div>
+                    </FilterableTableHead>
+                  </TableHead>
                   <TableHead>RFM Segment</TableHead>
-                  <TableHead>Priority</TableHead>
+                  <TableHead>
+                    <FilterableTableHead label="Priority" active={Boolean(priorityFilter)}>
+                      <select
+                        value={priorityFilter}
+                        onChange={(event) => setPriorityFilter(event.target.value)}
+                        aria-label="Filter by priority"
+                        className="h-9 w-full rounded-lg border border-border bg-background px-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
+                      >
+                        <option value="">All priorities</option>
+                        <option value="High Priority">High Priority</option>
+                        <option value="Medium Priority">Medium Priority</option>
+                        <option value="Low Priority">Low Priority</option>
+                      </select>
+                    </FilterableTableHead>
+                  </TableHead>
                   <TableHead>Suggested Action</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
