@@ -28,6 +28,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardTitleTooltip,
 } from "@/components/ui/card"
 import {
   Dialog,
@@ -698,7 +699,11 @@ export function CampaignKpis() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Campaign History</CardTitle>
+              <CardTitleTooltip
+                title="Campaign History"
+                tooltip="Every outreach campaign ever created, newest first. Click a row to load its KPIs in the cards above."
+                className="text-lg"
+              />
               <CardDescription>
                 {filteredHistory.length} campaign{filteredHistory.length === 1 ? "" : "s"}, newest first.
                 Click a row to view its KPIs above.
