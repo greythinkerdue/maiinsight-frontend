@@ -69,6 +69,16 @@ export interface RecommendedCustomersResponse {
     totalRevenue: number
     averageMonthlyRevenue: number
   } | null
+  occupancyForecast: {
+    available: boolean
+    forecastOccupancyRate: number | null
+    trendPerWeek: number | null
+    confidenceBandLow: number | null
+    confidenceBandHigh: number | null
+    historicalWeeks: number
+    method: string | null
+    reason?: string
+  } | null
   pagination: {
     limit: number
     offset: number

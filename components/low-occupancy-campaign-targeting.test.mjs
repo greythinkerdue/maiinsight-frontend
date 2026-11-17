@@ -26,6 +26,14 @@ test("recommendation request carries campaign date and bounded history", () => {
   assert.doesNotMatch(api, /minSessionBookingCount/)
 })
 
+test("occupancy forecast renders a predicted value or an unavailable reason", () => {
+  assert.match(source, /Predicted Next Occupancy/)
+  assert.match(source, /occupancyForecast\.forecastOccupancyRate/)
+  assert.match(source, /occupancyForecast\.confidenceBandLow/)
+  assert.match(source, /occupancyForecast\.reason/)
+  assert.match(api, /occupancyForecast:\s*\{/)
+})
+
 test("monthly cards expose facility occupancy, filled slots, revenue, and partial-period date", () => {
   assert.match(source, /monthlyPerformance\.map/)
   assert.match(source, /Occupancy Rate/)

@@ -454,6 +454,7 @@ const playtimeRequestRef = useRef(0)
   const [segmentName, setSegmentName] = useState(INITIAL_SEGMENT_NAME)
   const [monthlyPerformance, setMonthlyPerformance] = useState<RecommendedCustomersResponse["monthlyPerformance"]>([])
   const [historicalSummary, setHistoricalSummary] = useState<RecommendedCustomersResponse["historicalSummary"]>(null)
+  const [occupancyForecast, setOccupancyForecast] = useState<RecommendedCustomersResponse["occupancyForecast"]>(null)
   const [latestCampaignPlayDate, setLatestCampaignPlayDate] = useState<string | null>(null)
   const [slotAvailability, setSlotAvailability] = useState<SlotAvailability | null>(null)
   const [audienceCoverage, setAudienceCoverage] = useState<AudienceCoverage | null>(null)
@@ -536,6 +537,7 @@ const playtimeRequestRef = useRef(0)
       setCustomers(response.customers)
       setMonthlyPerformance(response.monthlyPerformance || [])
       setHistoricalSummary(response.historicalSummary)
+      setOccupancyForecast(response.occupancyForecast)
       setLatestCampaignPlayDate(response.latestPlayDate)
       setSlotAvailability(response.slotAvailability)
       setAudienceCoverage(response.audienceCoverage)
@@ -1486,6 +1488,30 @@ const dataMonthRangeLabel = buildMonthRangeLabel(dataMonthRange?.min ?? null, da
                 <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Average Monthly Revenue</p>
                 <p className="mt-1.5 whitespace-nowrap text-xl font-bold text-foreground">Rp {historicalSummary.averageMonthlyRevenue.toLocaleString("id-ID")}</p>
               </div>
+            </div>
+          )}
+          {occupancyForecast && (
+            <div className="rounded-2xl border border-dashed border-primary/30 bg-primary/5 p-4">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Predicted Next Occupancy
+              </p>
+              {occupancyForecast.available ? (
+                <>
+                  <p className="mt-1.5 text-xl font-bold text-foreground">
+                    {occupancyForecast.forecastOccupancyRate}%{" "}
+                    <span className="text-sm font-medium text-muted-foreground">
+                      ({occupancyForecast.confidenceBandLow}%–{occupancyForecast.confidenceBandHigh}%)
+                    </span>
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Trend {occupancyForecast.trendPerWeek! >= 0 ? "+" : ""}
+                    {occupancyForecast.trendPerWeek} pts/week over {occupancyForecast.historicalWeeks}{" "}
+                    historical weeks (Holt&apos;s linear-trend smoothing).
+                  </p>
+                </>
+              ) : (
+                <p className="mt-1.5 text-sm text-muted-foreground">{occupancyForecast.reason}</p>
+              )}
             </div>
           )}
           {monthlyPerformance.length > 0 && (
