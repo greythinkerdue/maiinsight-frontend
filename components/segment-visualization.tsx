@@ -2137,7 +2137,7 @@ export function SegmentVisualization({ onNavigate }: SegmentVisualizationProps =
           open={activeActionModal !== null}
           onOpenChange={(open) => !open && setActiveActionModal(null)}
         >
-          <DialogContent className="max-w-xl">
+          <DialogContent className="sm:max-w-xl">
             {activeActionModal === "lapsed" && (
               <>
                 <DialogHeader>
