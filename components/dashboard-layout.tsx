@@ -10,6 +10,7 @@ import { DataManagement } from "./data-management"
 import { LowOccupancyTargeting } from "./low-occupancy-targeting"
 import { GenAIWorkspace } from "./genai-workspace"
 import { CampaignKpis } from "./campaign-kpis"
+import { ChurnRiskPanel } from "./churn-risk-panel"
 import { InstaSightHub } from "./instasight-hub"
 import { ActivityLogs } from "./activity-logs"
 import { SystemSettings } from "./system-settings"
@@ -46,6 +47,8 @@ export function DashboardLayout({
         return <GenAIWorkspace />
       case "campaign-kpis":
         return <CampaignKpis />
+      case "churn-risk":
+        return <ChurnRiskPanel />
       case "instasight":
         return performanceView === "audience" ? (
           <MetaAudience onBack={() => setPerformanceView("performance")} />

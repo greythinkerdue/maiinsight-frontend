@@ -24,6 +24,7 @@ import {
   GitGraph,
   FileText,
   Target,
+  TrendingDown,
 } from "lucide-react"
 
 export type PageId =
@@ -33,6 +34,7 @@ export type PageId =
   | "targeting"
   | "genai"
   | "campaign-kpis"
+  | "churn-risk"
   | "instasight"
   | "history"
   | "settings"
@@ -52,6 +54,7 @@ const navItems = [
   { id: "targeting" as PageId, label: "Fill Sessions", icon: Target },
   { id: "genai" as PageId, label: "GenAI Workspace", icon: Sparkles },
   { id: "campaign-kpis" as PageId, label: "Campaign KPIs", icon: BarChart3 },
+  { id: "churn-risk" as PageId, label: "Churn Risk", icon: TrendingDown },
   { id: "reports" as PageId, label: "Management Reports", icon: FileText },
   { id: "history" as PageId, label: "History", icon: History },
   { id: "settings" as PageId, label: "Settings", icon: Settings },

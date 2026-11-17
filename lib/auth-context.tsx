@@ -18,7 +18,7 @@ export interface CurrentUser {
 
 export type PageId =
   | "dashboard" | "segments" | "data" | "targeting"
-  | "genai" | "campaign-kpis" | "instasight" | "history" | "settings" | "reports"
+  | "genai" | "campaign-kpis" | "churn-risk" | "instasight" | "history" | "settings" | "reports"
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:5000"
 export const DEFAULT_PAGE: PageId = "dashboard"
@@ -28,7 +28,7 @@ const SESSION_TIMEOUT_MS = 8 * 60 * 60 * 1000
 
 export const VALID_PAGES = new Set<PageId>([
   "dashboard", "segments", "data", "targeting",
-  "genai", "campaign-kpis", "instasight", "history", "settings", "reports",
+  "genai", "campaign-kpis", "churn-risk", "instasight", "history", "settings", "reports",
 ])
 
 interface AuthContextValue {
