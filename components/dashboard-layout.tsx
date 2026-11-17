@@ -48,7 +48,7 @@ export function DashboardLayout({
       case "campaign-kpis":
         return <CampaignKpis />
       case "churn-risk":
-        return <ChurnRiskPanel />
+        return <ChurnRiskPanel onNavigate={onNavigate} />
       case "instasight":
         return performanceView === "audience" ? (
           <MetaAudience onBack={() => setPerformanceView("performance")} />

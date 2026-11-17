@@ -2,11 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react"
 import {
+  AlertCircle,
   AlertTriangle,
+  ArrowDownRight,
+  ArrowUpRight,
+  Check,
   ListChecks,
   Loader2,
   Percent,
   RefreshCw,
+  Send,
   Target,
   TrendingDown,
   Users,
@@ -23,6 +28,13 @@ import {
   KpiCard,
   StateCard,
 } from "@/components/ui/card"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -40,11 +52,17 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import {
+  createChurnReactivationCampaign,
   getChurnRiskLatest,
   trainChurnModel,
   type ChurnModelRun,
   type CustomerChurnScore,
 } from "@/lib/churn-risk"
+import type { PageId } from "@/components/dashboard-sidebar"
+
+interface ChurnRiskPanelProps {
+  onNavigate: (page: PageId) => void
+}
 
 const RISK_BADGE_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   High: "destructive",
@@ -62,7 +80,13 @@ const describeAucQuality = (auc: number | null) => {
   return { label: "Weak", tone: "destructive" as const }
 }
 
-export function ChurnRiskPanel() {
+// AUC is base-rate-independent, but the raw churn rate is still useful
+// context: if 80% of customers already churn, a model that just always
+// predicts "churn" would be "right" 80% of the time on accuracy alone.
+const computeNaiveBaselineAccuracy = (testPositiveRate: number | null) =>
+  testPositiveRate === null ? null : Math.max(testPositiveRate, 1 - testPositiveRate)
+
+export function ChurnRiskPanel({ onNavigate }: ChurnRiskPanelProps) {
   const [run, setRun] = useState<ChurnModelRun | null>(null)
   const [customers, setCustomers] = useState<CustomerChurnScore[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -72,6 +96,18 @@ export function ChurnRiskPanel() {
   const [riskLabelFilter, setRiskLabelFilter] = useState<string>("all")
   const [search, setSearch] = useState("")
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc")
+
+  const [campaignDialogOpen, setCampaignDialogOpen] = useState(false)
+  const [campaignRiskLabel, setCampaignRiskLabel] = useState<"High" | "Medium" | "Low">("High")
+  const [campaignName, setCampaignName] = useState("")
+  const [promoCodePrefix, setPromoCodePrefix] = useState("WINBACK")
+  const [campaignDate, setCampaignDate] = useState("")
+  const [costBudget, setCostBudget] = useState("0")
+  const [controlPercent, setControlPercent] = useState("10")
+  const [consentConfirmed, setConsentConfirmed] = useState(false)
+  const [isCreatingCampaign, setIsCreatingCampaign] = useState(false)
+  const [createCampaignError, setCreateCampaignError] = useState<string | null>(null)
+  const [createdCampaign, setCreatedCampaign] = useState<{ name: string; recipientCount: number } | null>(null)
 
   const loadLatest = useCallback(async () => {
     setIsLoading(true)
@@ -110,6 +146,44 @@ export function ChurnRiskPanel() {
     }
   }
 
+  const openCampaignDialog = () => {
+    const defaultRisk = riskLabelFilter === "all" ? "High" : (riskLabelFilter as "High" | "Medium" | "Low")
+    setCampaignRiskLabel(defaultRisk)
+    setCampaignName(`Churn Reactivation - ${defaultRisk} Risk`)
+    setPromoCodePrefix("WINBACK")
+    setCampaignDate("")
+    setCostBudget("0")
+    setControlPercent("10")
+    setConsentConfirmed(false)
+    setCreateCampaignError(null)
+    setCreatedCampaign(null)
+    setCampaignDialogOpen(true)
+  }
+
+  const handleCreateCampaign = async () => {
+    setIsCreatingCampaign(true)
+    setCreateCampaignError(null)
+    try {
+      const result = await createChurnReactivationCampaign({
+        riskLabel: campaignRiskLabel,
+        name: campaignName.trim() || undefined,
+        campaignDate: campaignDate || undefined,
+        promoCodePrefix,
+        costBudget: Number(costBudget) || 0,
+        controlPercent: Number(controlPercent) || 0,
+        consentConfirmed,
+      })
+      setCreatedCampaign({
+        name: result.campaign.name,
+        recipientCount: result.campaign.recipientCount,
+      })
+    } catch (error) {
+      setCreateCampaignError(error instanceof Error ? error.message : "Failed to create campaign.")
+    } finally {
+      setIsCreatingCampaign(false)
+    }
+  }
+
   const trainButton = (
     <Button onClick={handleTrain} disabled={isTraining}>
       {isTraining ? (
@@ -125,6 +199,8 @@ export function ChurnRiskPanel() {
   )
 
   const aucQuality = describeAucQuality(run?.aucTest ?? null)
+  const baselineAccuracy = computeNaiveBaselineAccuracy(run?.testPositiveRate ?? null)
+  const canSendCampaign = run?.status === "completed" && customers.length > 0
 
   return (
     <div className="space-y-6">
@@ -138,7 +214,12 @@ export function ChurnRiskPanel() {
             days, from a logistic regression trained on historical monthly snapshots.
           </p>
         </div>
-        {trainButton}
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={openCampaignDialog} disabled={!canSendCampaign}>
+            <Send className="mr-2 h-4 w-4" /> Send Reactivation Campaign
+          </Button>
+          {trainButton}
+        </div>
       </div>
 
       {trainError && (
@@ -191,7 +272,14 @@ export function ChurnRiskPanel() {
               value={`${formatPercent(run.precisionTest)} / ${formatPercent(run.recallTest)}`}
               icon={Percent}
               changeLabel={`F1 ${run.f1Test === null ? "n/a" : run.f1Test.toFixed(3)} at threshold ${run.threshold}`}
-            />
+            >
+              {baselineAccuracy !== null && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Naive &quot;always predict majority class&quot; baseline: {formatPercent(baselineAccuracy)} accuracy —
+                  AUC above is base-rate-independent, so it&apos;s the fairer comparison.
+                </p>
+              )}
+            </KpiCard>
             <KpiCard
               label="Train / Test Rows"
               value={`${run.trainSize} / ${run.testSize}`}
@@ -251,12 +339,13 @@ export function ChurnRiskPanel() {
                     <TableHead>Probability</TableHead>
                     <TableHead>Risk</TableHead>
                     <TableHead>Days Since Last Booking</TableHead>
+                    <TableHead>Top Drivers</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {customers.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center text-sm text-muted-foreground">
+                      <TableCell colSpan={5} className="text-center text-sm text-muted-foreground">
                         No customers match the current filters.
                       </TableCell>
                     </TableRow>
@@ -275,6 +364,27 @@ export function ChurnRiskPanel() {
                             ? Math.round(customer.featuresSnapshot.recencyDays)
                             : "-"}
                         </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-1">
+                            {customer.topDrivers.length === 0 ? (
+                              <span className="text-xs text-muted-foreground">-</span>
+                            ) : (
+                              customer.topDrivers.map((driver) => (
+                                <span
+                                  key={driver.label}
+                                  className="inline-flex items-center gap-1 text-xs text-muted-foreground"
+                                >
+                                  {driver.direction === "increases_risk" ? (
+                                    <ArrowUpRight className="h-3 w-3 text-destructive" />
+                                  ) : (
+                                    <ArrowDownRight className="h-3 w-3 text-emerald-600" />
+                                  )}
+                                  {driver.label}
+                                </span>
+                              ))
+                            )}
+                          </div>
+                        </TableCell>
                       </TableRow>
                     ))
                   )}
@@ -284,6 +394,134 @@ export function ChurnRiskPanel() {
           </Card>
         </>
       )}
+
+      <Dialog
+        open={campaignDialogOpen}
+        onOpenChange={(open) => {
+          setCampaignDialogOpen(open)
+          if (!open) setCreateCampaignError(null)
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send Reactivation Campaign</DialogTitle>
+            <DialogDescription>
+              {createdCampaign
+                ? "Campaign created. You can manage sending and track results from Campaign KPIs."
+                : "Builds a WhatsApp outreach campaign from the latest churn model's at-risk customers, with the same holdout-group and consent safeguards as other campaigns."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {createdCampaign ? (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-border bg-secondary/20 p-3 text-sm">
+                <p className="font-medium">{createdCampaign.name}</p>
+                <p className="text-muted-foreground">{createdCampaign.recipientCount} recipients</p>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setCampaignDialogOpen(false)}>
+                  Close
+                </Button>
+                <Button
+                  className="gap-2"
+                  onClick={() => {
+                    setCampaignDialogOpen(false)
+                    onNavigate("campaign-kpis")
+                  }}
+                >
+                  View in Campaign KPIs
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <label className="space-y-2 text-sm font-medium sm:col-span-2">
+                  <span>Campaign Name</span>
+                  <Input value={campaignName} onChange={(event) => setCampaignName(event.target.value)} maxLength={160} />
+                </label>
+                <label className="space-y-2 text-sm font-medium">
+                  <span>Risk Level</span>
+                  <Select value={campaignRiskLabel} onValueChange={(value) => setCampaignRiskLabel(value as "High" | "Medium" | "Low")}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="High">High</SelectItem>
+                      <SelectItem value="Medium">Medium</SelectItem>
+                      <SelectItem value="Low">Low</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </label>
+                <label className="space-y-2 text-sm font-medium">
+                  <span>Campaign Date</span>
+                  <Input type="date" value={campaignDate} onChange={(event) => setCampaignDate(event.target.value)} />
+                  <span className="block text-xs font-normal text-muted-foreground">Defaults to tomorrow if left blank.</span>
+                </label>
+                <label className="space-y-2 text-sm font-medium">
+                  <span>Promo Code Prefix</span>
+                  <Input
+                    value={promoCodePrefix}
+                    onChange={(event) => setPromoCodePrefix(event.target.value.toUpperCase())}
+                    maxLength={20}
+                  />
+                </label>
+                <label className="space-y-2 text-sm font-medium">
+                  <span>Campaign Budget (Rp)</span>
+                  <Input type="number" min="0" step="1000" value={costBudget} onChange={(event) => setCostBudget(event.target.value)} />
+                </label>
+                <label className="space-y-2 text-sm font-medium sm:col-span-2">
+                  <span>Holdout Group (%)</span>
+                  <Input
+                    type="number"
+                    min="0"
+                    max="50"
+                    step="5"
+                    value={controlPercent}
+                    onChange={(event) => setControlPercent(event.target.value)}
+                  />
+                  <span className="block text-xs font-normal text-muted-foreground">
+                    Applied only when the audience has at least 20 customers.
+                  </span>
+                </label>
+              </div>
+
+              <label className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={consentConfirmed}
+                  onChange={(event) => setConsentConfirmed(event.target.checked)}
+                  className="mt-0.5 h-4 w-4"
+                />
+                <span className="text-amber-900">
+                  I confirm these are existing customers who agreed to receive promotional WhatsApp messages, and the message includes an opt-out path.
+                </span>
+              </label>
+
+              {createCampaignError ? (
+                <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                  {createCampaignError}
+                </div>
+              ) : null}
+
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setCampaignDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  className="gap-2"
+                  disabled={isCreatingCampaign || !consentConfirmed || !campaignName.trim()}
+                  onClick={() => void handleCreateCampaign()}
+                >
+                  {isCreatingCampaign ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  Create Campaign
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

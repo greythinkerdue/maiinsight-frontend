@@ -1,5 +1,6 @@
 import { getApiUrl } from "@/lib/api"
 import { getAuthHeaders } from "@/lib/roles"
+import type { OutreachCampaignDetail } from "@/lib/targeting"
 
 export interface ChurnModelRun {
   id: number
@@ -24,6 +25,7 @@ export interface CustomerChurnScore {
   churnProbability: number
   riskLabel: "High" | "Medium" | "Low"
   featuresSnapshot: Record<string, number> | null
+  topDrivers: Array<{ label: string; direction: "increases_risk" | "decreases_risk" }>
 }
 
 export interface ChurnRiskLatestResponse {
@@ -96,4 +98,26 @@ export const getChurnRiskLatest = async (
   })
 
   return readApiResponse<ChurnRiskLatestResponse>(response)
+}
+
+export const createChurnReactivationCampaign = async (params: {
+  riskLabel: "High" | "Medium" | "Low"
+  name?: string
+  campaignDate?: string
+  promoCodePrefix?: string
+  costBudget?: number
+  controlPercent?: number
+  consentConfirmed: boolean
+}) => {
+  const response = await fetch(getApiUrl("/churn-risk/reactivation-campaign"), {
+    method: "POST",
+    cache: "no-store",
+    headers: {
+      ...getAuthHeaders(),
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(params),
+  })
+
+  return readApiResponse<OutreachCampaignDetail>(response)
 }

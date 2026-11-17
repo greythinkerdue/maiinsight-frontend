@@ -22,9 +22,33 @@ test("ChurnRiskPanel's at-risk customer table has the expected columns", () => {
   const start = source.indexOf("<TableHeader>")
   const end = source.indexOf("</TableHeader>", start)
   const header = source.slice(start, end)
-  for (const column of ["Customer", "Probability", "Risk", "Days Since Last Booking"]) {
+  for (const column of ["Customer", "Probability", "Risk", "Days Since Last Booking", "Top Drivers"]) {
     assert.match(header, new RegExp(`>${column}<`))
   }
+})
+
+test("ChurnRiskPanel shows per-customer top drivers with a direction indicator", () => {
+  assert.match(source, /customer\.topDrivers\.map/)
+  assert.match(source, /direction === "increases_risk"/)
+  assert.match(source, /ArrowUpRight/)
+  assert.match(source, /ArrowDownRight/)
+})
+
+test("ChurnRiskPanel shows a naive baseline accuracy next to Precision / Recall", () => {
+  assert.match(source, /computeNaiveBaselineAccuracy/)
+  assert.match(source, /always predict majority class/)
+})
+
+test("ChurnRiskPanel can send a reactivation campaign from the at-risk audience", () => {
+  assert.match(source, /Send Reactivation Campaign/)
+  assert.match(source, /createChurnReactivationCampaign\(/)
+  assert.match(source, /consentConfirmed/)
+  assert.match(source, /View in Campaign KPIs/)
+})
+
+test("lib/churn-risk.ts exposes the reactivation campaign API call", () => {
+  assert.match(api, /\/churn-risk\/reactivation-campaign/)
+  assert.match(api, /consentConfirmed: boolean/)
 })
 
 test("ChurnRiskPanel handles the insufficient_data and failed run states", () => {
@@ -42,5 +66,5 @@ test("churn-risk page is registered in navigation, permissions, and the layout s
   assert.match(sidebar, /"churn-risk"/)
   assert.match(roles, /"churn-risk"/)
   assert.match(layout, /case "churn-risk":/)
-  assert.match(layout, /<ChurnRiskPanel \/>/)
+  assert.match(layout, /<ChurnRiskPanel onNavigate=\{onNavigate\} \/>/)
 })
