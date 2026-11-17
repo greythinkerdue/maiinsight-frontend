@@ -31,3 +31,16 @@ test("formatSignificance reports both the significant and not-significant case",
   assert.match(fn, /significant \(p=/)
   assert.match(fn, /not significant \(p=/)
 })
+
+test("Campaign History is searchable, paginated, and rows select a campaign", () => {
+  const start = source.indexOf("Campaign History")
+  const end = source.indexOf("</Card>", start)
+  const section = source.slice(start, end)
+
+  assert.match(section, /Search campaign history/)
+  assert.match(section, /historySearch/)
+  assert.match(section, /<Pagination/)
+  assert.match(section, /historyTotalPages > 1/)
+  assert.match(section, /onClick=\{\(\) => handleSelectCampaign\(String\(campaign\.id\)\)\}/)
+  assert.doesNotMatch(section, /<table /)
+})

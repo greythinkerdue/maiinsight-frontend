@@ -36,6 +36,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination"
 import {
   Select,
   SelectContent,
@@ -43,6 +52,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
 import { getStoredRole, USER_ROLES } from "@/lib/roles"
 import {
   getCampaignKpis,
@@ -134,6 +151,9 @@ export function CampaignKpis() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
+  const [historySearch, setHistorySearch] = useState("")
+  const [historyPage, setHistoryPage] = useState(1)
+  const HISTORY_PAGE_SIZE = 8
 
   const [isScanning, setIsScanning] = useState(false)
   const [scanResult, setScanResult] = useState<AutoDraftScanResult | null>(null)
@@ -180,6 +200,16 @@ export function CampaignKpis() {
     setSelectedCampaignId(value)
     void loadOverview(Number(value))
   }
+
+  const filteredHistory = (overview?.campaigns || []).filter((campaign) =>
+    historySearch ? campaign.name.toLowerCase().includes(historySearch.toLowerCase()) : true
+  )
+  const historyTotalPages = Math.max(1, Math.ceil(filteredHistory.length / HISTORY_PAGE_SIZE))
+  const safeHistoryPage = Math.min(historyPage, historyTotalPages)
+  const pagedHistory = filteredHistory.slice(
+    (safeHistoryPage - 1) * HISTORY_PAGE_SIZE,
+    safeHistoryPage * HISTORY_PAGE_SIZE
+  )
 
   const handleRemoveSuppression = async (customerKey: string) => {
     const confirmed = window.confirm(
@@ -669,38 +699,110 @@ export function CampaignKpis() {
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Campaign History</CardTitle>
-              <CardDescription>All campaigns, newest first.</CardDescription>
+              <CardDescription>
+                {filteredHistory.length} campaign{filteredHistory.length === 1 ? "" : "s"}, newest first.
+                Click a row to view its KPIs above.
+              </CardDescription>
             </CardHeader>
-            <CardContent className="overflow-x-auto p-0">
-              <table className="min-w-[900px] divide-y divide-border text-sm">
-                <thead className="bg-secondary/30 text-left text-muted-foreground">
-                  <tr>
-                    <th className="px-4 py-3 font-semibold">Campaign</th>
-                    <th className="px-4 py-3 font-semibold">Date</th>
-                    <th className="px-4 py-3 font-semibold">Session</th>
-                    <th className="px-4 py-3 font-semibold">Segment</th>
-                    <th className="px-4 py-3 font-semibold">Recipients</th>
-                    <th className="px-4 py-3 font-semibold">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {overview?.campaigns.map((campaign) => (
-                    <tr
-                      key={campaign.id}
-                      className={campaign.id === selected.campaign.id ? "bg-primary/5" : undefined}
-                    >
-                      <td className="px-4 py-3 font-medium">{campaign.name}</td>
-                      <td className="px-4 py-3">{formatDate(String(campaign.campaignDate))}</td>
-                      <td className="px-4 py-3">{campaign.sessionName}</td>
-                      <td className="px-4 py-3">{campaign.segmentName || "All segments"}</td>
-                      <td className="px-4 py-3">{campaign.recipientCount}</td>
-                      <td className="px-4 py-3">
-                        <Badge variant="secondary">{campaign.status}</Badge>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <CardContent className="space-y-3">
+              <div className="relative max-w-xs">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={historySearch}
+                  onChange={(event) => {
+                    setHistorySearch(event.target.value)
+                    setHistoryPage(1)
+                  }}
+                  placeholder="Search campaign name..."
+                  className="pl-9"
+                  aria-label="Search campaign history"
+                />
+              </div>
+
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Campaign</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Session</TableHead>
+                    <TableHead>Segment</TableHead>
+                    <TableHead className="text-right">Recipients</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pagedHistory.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-sm text-muted-foreground">
+                        No campaigns match &quot;{historySearch}&quot;.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    pagedHistory.map((campaign) => (
+                      <TableRow
+                        key={campaign.id}
+                        className={`cursor-pointer ${campaign.id === selected.campaign.id ? "bg-primary/5" : ""}`}
+                        onClick={() => handleSelectCampaign(String(campaign.id))}
+                      >
+                        <TableCell className="font-medium">{campaign.name}</TableCell>
+                        <TableCell className="whitespace-nowrap">{formatDate(String(campaign.campaignDate))}</TableCell>
+                        <TableCell>{campaign.sessionName}</TableCell>
+                        <TableCell>{campaign.segmentName || "All segments"}</TableCell>
+                        <TableCell className="text-right">{campaign.recipientCount}</TableCell>
+                        <TableCell>
+                          <Badge variant={STATUS_BADGE_VARIANT[campaign.status] || "secondary"}>
+                            {campaign.status}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+
+              {historyTotalPages > 1 ? (
+                <Pagination className="justify-between gap-4">
+                  <p className="text-sm text-muted-foreground">
+                    Page {safeHistoryPage} of {historyTotalPages}
+                  </p>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        href="#"
+                        aria-disabled={safeHistoryPage === 1}
+                        onClick={(event) => {
+                          event.preventDefault()
+                          setHistoryPage((page) => Math.max(1, page - 1))
+                        }}
+                      />
+                    </PaginationItem>
+                    {Array.from({ length: historyTotalPages }, (_, index) => index + 1).map((page) => (
+                      <PaginationItem key={page}>
+                        <PaginationLink
+                          href="#"
+                          isActive={page === safeHistoryPage}
+                          onClick={(event) => {
+                            event.preventDefault()
+                            setHistoryPage(page)
+                          }}
+                        >
+                          {page}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+                    <PaginationItem>
+                      <PaginationNext
+                        href="#"
+                        aria-disabled={safeHistoryPage === historyTotalPages}
+                        onClick={(event) => {
+                          event.preventDefault()
+                          setHistoryPage((page) => Math.min(historyTotalPages, page + 1))
+                        }}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              ) : null}
             </CardContent>
           </Card>
         </>
