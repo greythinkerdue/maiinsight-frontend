@@ -15,6 +15,12 @@ Next.js · TypeScript · K-Means++ Segmentation · Logistic Regression Churn Mod
 
 ---
 
+![Overview dashboard](./docs/screenshots/overview-dashboard.jpg)
+*Business snapshot — occupancy, revenue, and an AI-generated business insight, built from the uploaded booking data.*
+
+![Ask the AI](./docs/screenshots/ask-the-ai.jpg)
+*Free-form business question answered by Gemini, grounded in the venue's actual occupancy data — not a canned response.*
+
 ## ✨ Overview
 
 **MaiinSight** is a marketing decision-support dashboard built for **Maiin Gandaria**, a multi-court sports venue business (basketball, mini soccer). Instead of guessing which customers to target or which time slots need a push, MaiinSight turns raw booking history into a segmentation model, a churn-risk predictor, a demand forecast, and an AI strategy assistant — then ties all of it directly into real outreach campaigns with proper experiment design (holdout groups, significance testing, consent gates).
