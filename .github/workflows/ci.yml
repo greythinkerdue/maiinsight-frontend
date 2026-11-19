@@ -22,7 +22,7 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run typecheck
-      - run: node --test components/*.test.mjs lib/*.test.mjs
+      - run: npm run test
 
   build:
     needs: lint-typecheck-test
