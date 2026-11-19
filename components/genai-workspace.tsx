@@ -701,6 +701,10 @@ export function GenAIWorkspace({ userRole: userRoleFromProps }: GenAIWorkspacePr
   useEffect(() => {
     if (!canViewPage) return
     void loadWorkspaceStatus()
+    // Intentionally fires once when the page becomes viewable, not on every filter change —
+    // loadWorkspaceStatus reads the current filter state when the user acts (generate/approve
+    // already call it directly), so it isn't a stale closure in those paths.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canViewPage])
 
   const requestPayload = useMemo(() => {

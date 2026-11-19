@@ -530,6 +530,8 @@ interface SegmentVisualizationProps {
   onNavigate?: (page: PageId) => void
 }
 
+const RADAR_METRICS = ["Recency", "Frequency", "Monetary", "R Score", "F Score", "M Score"] as const
+
 export function SegmentVisualization({ onNavigate }: SegmentVisualizationProps = {}) {
   const [activeActionModal, setActiveActionModal] = useState<
     "high-value" | "regular" | "lapsed" | "monetary" | null
@@ -1141,8 +1143,6 @@ export function SegmentVisualization({ onNavigate }: SegmentVisualizationProps =
       },
     }))
   }, [clusters])
-
-  const RADAR_METRICS = ["Recency", "Frequency", "Monetary", "R Score", "F Score", "M Score"] as const
 
   // "All Segments" overlays every segment's radar shape on the same chart
   // instead of a single line, so segments can be compared at a glance.
